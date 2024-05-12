@@ -7,11 +7,18 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_info(json.loads(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']), scopes=scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(os.environ['SHEET_KEY']).sheet1
-    return sheet
+    """
+    Initialize the Google Sheet client using the credentials stored in 'credentials.json'.
+    """
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(os.getenv('PLANILHA')).worksheet('Página1')
+        return sheet
+    except Exception as e:
+        print(f'Error initializing Google Sheet: {e}')
+        raise
 
 # Ministério do Esporte
 def raspar_noticias_esporte(url, sheet, data_desejada=None):
