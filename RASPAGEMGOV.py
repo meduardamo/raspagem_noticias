@@ -9,38 +9,31 @@ Original file is located at
 # Preparando
 """
 
+import os
+import json
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import requests
 from bs4 import BeautifulSoup
-import datetime
-
-"""# Ministério do Esporte"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    creds = Credentials.from_service_account_info(json.loads(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']), scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY').sheet1
+    sheet = client.open_by_key(os.environ['SHEET_KEY']).sheet1
     return sheet
 
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
+# Ministério do Esporte
+def raspar_noticias_esporte(url, sheet, data_desejada=None):
     if data_desejada is None:
         data_desejada = datetime.now().strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-
     response = requests.get(url)
     html_content = response.text
     soup = BeautifulSoup(html_content, 'html.parser')
     meta_tag = soup.find('meta', property="og:site_name")
     nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
     noticias = soup.find_all('li')
-
     for noticia in noticias:
         data = noticia.find('span', class_='data')
         if data and data.text.strip() == data_desejada:
@@ -49,40 +42,12 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
             descricao = noticia.find('span', class_='descricao')
             descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
             link = noticia.find('h2', class_='titulo').find('a')['href']
-
-            dados = [
-                data.text.strip(),  # Data
-                nome_ministerio,    # Nome do Ministério
-                subtitulo,          # Subtítulo
-                titulo,             # Título
-                descricao_text,     # Descrição
-                link                # Link
-            ]
-
+            dados = [data.text.strip(), nome_ministerio, subtitulo, titulo, descricao_text, link]
             sheet.append_row(dados)
+    print('Dados do Esporte inseridos com sucesso na planilha.')
 
-    print('Dados inseridos com sucesso na planilha.')
-
-# Exemplo de uso
-sheet = initialize_sheet()
-url = "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte"
-
-# Para raspar notícias da data atual
-raspar_noticias_por_data(url, sheet)
-
-"""# Ministério da Educação"""
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY').sheet1
-    return sheet
-
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
-    if data_desejada is None:
-        data_desejada = datetime.now().strftime("%d/%m/%Y")
-
+# Ministério da Educação
+def raspar_noticias_educacao(url, sheet, data_desejada=None):
     response = requests.get(url)
     if response.status_code == 200:
         html_content = response.text
@@ -90,7 +55,6 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
         meta_tag = soup.find('meta', property="og:site_name")
         nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
         noticias = soup.find_all('li')
-
         for noticia in noticias:
             data = noticia.find('span', class_='data')
             if data and data.text.strip() == data_desejada:
@@ -99,207 +63,40 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
                 descricao = noticia.find('span', class_='descricao')
                 descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
                 link = noticia.find('h2', class_='titulo').find('a')['href']
-
-                dados = [
-                    data.text.strip(),
-                    nome_ministerio,
-                    subtitulo,
-                    titulo,
-                    descricao_text,
-                    link
-                ]
+                dados = [data.text.strip(), nome_ministerio, subtitulo, titulo, descricao_text, link]
                 sheet.append_row(dados)
-        print('Dados inseridos com sucesso na planilha.')
+        print('Dados da Educação inseridos com sucesso na planilha.')
     else:
         print(f"Erro ao acessar {url}, Status Code: {response.status_code}")
 
-# Exemplo de uso
-sheet = initialize_sheet()
-url = "https://www.gov.br/mec/pt-br/assuntos/noticias"
-
-# Para raspar notícias de uma data específica
-raspar_noticias_por_data(url, sheet)
-
-"""# Ministério da Saúde"""
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY').sheet1
-    return sheet
-
-def raspar_noticias(url, data_desejada=None):
-    if data_desejada is None:
-        data_desejada = datetime.now().strftime("%d/%m/%Y")
-
+# Ministério da Saúde
+def raspar_noticias_saude(url, data_desejada=None):
     sheet = initialize_sheet()
     response = requests.get(url)
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-
         nome_ministerio_tag = soup.find('a', href="https://www.gov.br/saude/pt-br")
         nome_ministerio = nome_ministerio_tag.text.strip() if nome_ministerio_tag else "Nome do Ministério não disponível"
-
         noticias = soup.find_all('article', class_='tileItem')
-
         for noticia in noticias:
             data_icon = noticia.find('i', class_='icon-day')
             data = data_icon.find_next_sibling(string=True).strip() if data_icon else "Data não disponível"
-
             if data == data_desejada:
                 subt = noticia.find('span', class_='subtitle')
                 subtitulo = subt.text.strip() if subt else "Subtítulo não disponível"
-
                 tit = noticia.find('h2', class_='tileHeadline').find('a')
                 titulo = tit.text.strip() if tit else "Título não disponível"
                 link = tit['href'] if tit else "Link não disponível"
-
                 desc = noticia.find('span', class_='description')
                 descricao = desc.text.strip() if desc else "Descrição não disponível"
-
                 sheet.append_row([data, nome_ministerio, subtitulo, titulo, descricao, link])
-        print('Dados inseridos com sucesso na planilha.')
+        print('Dados da Saúde inseridos com sucesso na planilha.')
     else:
         print(f"Erro ao acessar {url}, Status Code: {response.status_code}")
 
-url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
-raspar_noticias(url, '09/05/2024')
-
-"""# Igualdade Racial"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY').sheet1
-    return sheet
-
-def raspar_noticias_igualdade_racial(url, data_desejada=None):
-    if data_desejada is None:
-        data_desejada = datetime.now().strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-
+# Definir as variáveis de ambiente e as URLs dos ministérios
+if __name__ == "__main__":
     sheet = initialize_sheet()
-    response = requests.get(url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        nome_ministerio_tag = soup.find('div', class_='site-name').find('a')
-        nome_ministerio = nome_ministerio_tag.text.strip() if nome_ministerio_tag else "Nome do Ministério não disponível"
-
-        noticias = soup.find_all('li', class_='conteudo')
-
-        for noticia in noticias:
-            categoria = noticia.find('div', class_='categoria-noticia')
-            subtitulo = categoria.text.strip() if categoria else "Categoria não disponível"
-
-            titulo_tag = noticia.find('h2', class_='titulo').find('a')
-            titulo = titulo_tag.text.strip() if titulo_tag else "Título não disponível"
-            link = titulo_tag['href'] if titulo_tag else "Link não disponível"
-
-            descricao_tag = noticia.find('span', class_='descricao')
-            descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
-
-            data_tag = noticia.find('span', class_='data')
-            data = data_tag.text.strip() if data_tag else "Data não disponível"
-
-            # Print os dados coletados
-            print(f"Data: {data}, Ministério: {nome_ministerio}, Subtítulo: {subtitulo}, Título: {titulo}, Descrição: {descricao}, Link: {link}")
-
-            if data == data_desejada:
-                # Envia os dados para a planilha
-                sheet.append_row([data, nome_ministerio, subtitulo, titulo, descricao, link])
-        print('Dados inseridos com sucesso na planilha.')
-    else:
-        print(f"Erro ao acessar {url}, Status Code: {response.status_code}")
-
-# Exemplo de uso:
-url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
-raspar_noticias_igualdade_racial(url, "09/05/2024")  # Raspa notícias de uma data específica
-
-import requests
-from bs4 import BeautifulSoup
-
-# URL da página
-url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
-
-# Fazer a requisição para a página
-response = requests.get(url)
-soup = BeautifulSoup(response.content, 'html.parser')
-
-# Encontrar todos os elementos que representam uma notícia
-noticias = soup.find_all('li', class_='noticia')
-
-for noticia in noticias:
-    nome_ministerio = noticia.find('a', class_='site-name').text.strip()
-    titulo = noticia.find('h2', class_='titulo').text.strip()
-    categoria = noticia.find('div', class_='categoria-noticia').text.strip()
-    descricao = noticia.find('span', class_='descricao').text.strip()
-    data = noticia.find('span', class_='data').text.strip()
-    link = noticia.find('h2', class_='titulo').a['href']
-
-    print(f"Ministério: {nome_ministerio}")
-    print(f"Data: {data}")
-    print(f"Categoria: {categoria}")
-    print(f"Título: {titulo}")
-    print(f"Descrição: {descricao}")
-    print(f"Link: {link}\n")
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY').sheet1
-    return sheet
-
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
-    if data_desejada is None:
-        data_desejada = datetime.now().strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-
-    response = requests.get(url)
-    html_content = response.text
-    soup = BeautifulSoup(html_content, 'html.parser')
-    meta_tag = soup.find('meta', property="og:site_name")
-    nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
-    noticias = soup.find_all('li')
-
-    for noticia in noticias:
-        data = noticia.find('span', class_='data')
-        if data and data.text.strip() == data_desejada:
-            subtitulo = noticia.find('div', class_='subtitulo-noticia').text.strip()
-            titulo = noticia.find('h2', class_='titulo').text.strip()
-            descricao = noticia.find('span', class_='descricao')
-            descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
-            link = noticia.find('h2', class_='titulo').find('a')['href']
-
-            dados = [
-                data.text.strip(),  # Data
-                nome_ministerio,    # Nome do Ministério
-                subtitulo,          # Subtítulo
-                titulo,             # Título
-                descricao_text,     # Descrição
-                link                # Link
-            ]
-
-            sheet.append_row(dados)
-
-    print('Dados inseridos com sucesso na planilha.')
-
-# Exemplo de uso
-sheet = initialize_sheet()
-url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
-
-# Para raspar notícias da data atual
-raspar_noticias_por_data(url, sheet)
+    raspar_noticias_esporte("https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte", sheet)
+    raspar_noticias_educacao("https://www.gov.br/mec/pt-br/assuntos/noticias", sheet)
+    raspar_noticias_saude("https://www.gov.br/saude/pt-br/assuntos/noticias")
