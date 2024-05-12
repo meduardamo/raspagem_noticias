@@ -1,32 +1,33 @@
-name: Raspagem e Notificação Automática
+name: Raspagem e Salvamento Automático
 
 on:
   schedule:
-    - cron: '0 10,20 * * *'  # Executa todos os dias às 10:00 UTC e 20:00 UTC (07:00 e 17:00 BRT)
-  workflow_dispatch:  # Permite a execução manual do workflow através da interface do GitHub
+    - cron: '0 10,19 * * *'  # Executa às 10:00 e 19:00 UTC
+  workflow_dispatch:
 
 jobs:
-  run-script:
-    runs-on: ubuntu-latest  # Define o sistema operacional do runner
+  scrape_and_save:
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3  # Ação para verificar o código do seu repositório
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
     - name: Set up Python
-      uses: actions/setup-python@v4  # Ação para configurar o ambiente Python
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.x'  # Especifique a versão do Python mais recente da série 3.x
+        python-version: '3.8'
 
-    - name: Install dependencies
-      run: python -m pip install -r requirements.txt  # Instala as dependências do arquivo requirements.txt
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install gspread oauth2client requests beautifulsoup4
 
-    - name: Create credentials file
+    - name: Create Credentials File
       run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > credentials.json
-      shell: bash  # Cria um arquivo de credenciais para autenticação com o Google
 
-    - name: Execute script
-      run: python RASPAGEMGOV.py  # Executa o script Python
-      env:  # Configura as variáveis de ambiente necessárias para o script
+    - name: Run Scraper
+      run: python RASPAGEMGOV.py
+      env:
         PLANILHA: ${{ secrets.PLANILHA }}
         GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
