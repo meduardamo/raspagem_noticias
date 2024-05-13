@@ -12,7 +12,7 @@ def initialize_sheet():
     """
     try:
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+        creds = Credentials.from_json_keyfile_name('credentials.json', scope)
         client = gspread.authorize(creds)
         sheet = client.open_by_key(os.getenv('PLANILHA')).worksheet('Página1')
         return sheet
