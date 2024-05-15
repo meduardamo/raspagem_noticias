@@ -2,7 +2,7 @@ name: Raspagem e Notificação Automática
 
 on:
   schedule:
-    - cron: '0 10,20 * * *'
+    - cron: '0 * * * *'  # Executa a cada hora no minuto 0
   workflow_dispatch:  # Permite a execução manual do workflow através da interface do GitHub
 
 jobs:
@@ -16,17 +16,16 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4  # Ação para configurar o ambiente Python
       with:
-        python-version: '3.x'  # Especifique a versão do Python
+        python-version: '3.10'  # Especifique a versão do Python
 
     - name: Install dependencies
       run: python -m pip install -r requirements.txt  # Instala as dependências do arquivo requirements.txt
 
     - name: Create credentials file
-      run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > credentials.json
+      run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > /content/raspagemdou-151e0ee88b03.json
       shell: bash  # Cria um arquivo de credenciais para autenticação com o Google
 
     - name: Execute script
-      run: python RASPAGEMGOV.py  # Executa o script Python
+      run: python raspagem-noticias.py  # Executa o script Python
       env:  # Configura as variáveis de ambiente necessárias para o script
-        PLANILHA: ${{ secrets.PLANILHA }}
-        GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
+        GOOGLE_APPLICATION_CREDENTIALS: /content/raspagemdou-151e0ee88b03.json
