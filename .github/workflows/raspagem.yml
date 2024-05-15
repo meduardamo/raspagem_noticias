@@ -26,6 +26,6 @@ jobs:
       shell: bash  # Cria um arquivo de credenciais para autenticação com o Google
 
     - name: Execute script
-      run: python raspagem-noticias.py  # Executa o script Python
+      run: python raspagem_noticias.py  # Executa o script Python
       env:  # Configura as variáveis de ambiente necessárias para o script
         GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
