@@ -19,6 +19,13 @@ import pytz
 
 """# Ministério do Esporte"""
 
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+import pytz
+
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -62,24 +69,26 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
             print(f"Data da notícia: {data_text}")  # Adicionando ponto de depuração para verificar a data da notícia
             if data_text == data_desejada:
                 titulo_element = noticia.find('h2', class_='titulo')
-                url = titulo_element.find('a')['href']
-                if url not in already_scraped_urls:
-                    subtitulo = noticia.find('div', class_='subtitulo-noticia').text.strip()
-                    titulo = titulo_element.text.strip()
-                    descricao = noticia.find('span', class_='descricao')
-                    descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
+                if titulo_element:
+                    url = titulo_element.find('a')['href']
+                    if url not in already_scraped_urls:
+                        subtitulo_element = noticia.find('div', class_='subtitulo-noticia')
+                        subtitulo = subtitulo_element.text.strip() if subtitulo_element else "Sem subtítulo"
+                        titulo = titulo_element.text.strip()
+                        descricao = noticia.find('span', class_='descricao')
+                        descricao_text = descricao.text.split('-')[1].strip() if descricao and '-' in descricao.text else (descricao.text.strip() if descricao else "Sem descrição")
 
-                    dados = [
-                        data_text,           # Data
-                        nome_ministerio,     # Nome do Ministério
-                        subtitulo,           # Subtítulo
-                        titulo,              # Título
-                        descricao_text,      # Descrição
-                        url                  # URL
-                    ]
+                        dados = [
+                            data_text,           # Data
+                            nome_ministerio,     # Nome do Ministério
+                            subtitulo,           # Subtítulo
+                            titulo,              # Título
+                            descricao_text,      # Descrição
+                            url                  # URL
+                        ]
 
-                    sheet.sheet1.append_row(dados)
-                    add_scraped_url(sheet, url)
+                        sheet.sheet1.append_row(dados)
+                        add_scraped_url(sheet, url)
 
     print('Dados inseridos com sucesso na planilha.')
 
