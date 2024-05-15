@@ -22,10 +22,10 @@ jobs:
       run: python -m pip install -r requirements.txt  # Instala as dependências do arquivo requirements.txt
 
     - name: Create credentials file
-      run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > /content/raspagemdou-151e0ee88b03.json
+      run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > credentials.json
       shell: bash  # Cria um arquivo de credenciais para autenticação com o Google
 
     - name: Execute script
       run: python raspagem-noticias.py  # Executa o script Python
       env:  # Configura as variáveis de ambiente necessárias para o script
-        GOOGLE_APPLICATION_CREDENTIALS: /content/raspagemdou-151e0ee88b03.json
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
