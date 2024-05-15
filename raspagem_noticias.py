@@ -13,6 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import re
 from datetime import datetime
 import pytz
 
