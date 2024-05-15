@@ -9,20 +9,14 @@ Original file is located at
 # Preparando
 """
 
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import requests
-from bs4 import BeautifulSoup
-import datetime
-
-"""# Ministério do Esporte"""
-
 import requests
 from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import pytz
+
+"""# Ministério do Esporte"""
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -97,13 +91,6 @@ raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Educação"""
 
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import pytz
-
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -174,13 +161,6 @@ raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Saúde"""
 
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import pytz
-
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -246,13 +226,6 @@ url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
 raspar_noticias(url)
 
 """# Igualdade Racial"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import pytz
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -322,13 +295,6 @@ raspar_noticias(url)
 
 """# Povos Indígenas"""
 
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import pytz
-
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -395,13 +361,6 @@ data_especifica = "07/05/2024"
 raspar_noticias(url)
 
 """# Consed"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import pytz
 
 def initialize_sheet(sheet_id, sheet_name='Página2'):
     # Escopo e credenciais para acessar a API do Google Sheets
@@ -508,14 +467,6 @@ sheet = initialize_sheet(sheet_id, sheet_name='consed')
 raspar_noticias_por_data(sheet, max_pages=5)  # Substitua '14/05/2024' pela data desejada
 
 """# Undime"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import re
-from datetime import datetime
-import pytz
 
 def initialize_sheet(sheet_id, sheet_name='Página3'):
     # Escopo e credenciais para acessar a API do Google Sheets
