@@ -26,7 +26,7 @@ import pytz
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
@@ -106,7 +106,7 @@ import pytz
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
@@ -183,7 +183,7 @@ import pytz
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
@@ -256,7 +256,7 @@ import pytz
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('/content/raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
@@ -331,7 +331,7 @@ import pytz
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('/content/raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
@@ -406,7 +406,7 @@ import pytz
 def initialize_sheet(sheet_id, sheet_name='Página2'):
     # Escopo e credenciais para acessar a API do Google Sheets
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
     return sheet
@@ -515,98 +515,12 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import re
 from datetime import datetime
-
-def initialize_sheet(sheet_id, sheet_name='Página3'):
-    # Escopo e credenciais para acessar a API do Google Sheets
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('/content/raspagemdou-151e0ee88b03.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
-    return sheet
-
-def raspar_noticias(data_desejada):
-    url = "https://undime.org.br/noticia/page/1"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    noticias = soup.find_all('div', class_='noticia mt-4 shadow2 p-3 border-radius')
-
-    datas = []
-    titulos = []
-    descricoes = []
-    links = []
-
-    for noticia in noticias:
-        # Link e Data
-        link_elem = noticia.find('a', href=True)
-        if link_elem:
-            link = "https://undime.org.br" + link_elem['href']
-
-            # Extrair data do link e transformar em xx/xx/xxxx
-            data_match = re.search(r'\d{2}-\d{2}-\d{4}', link)
-            if data_match:
-                data_str = data_match.group(0)
-                data = datetime.strptime(data_str, '%d-%m-%Y').strftime('%d/%m/%Y')
-                if data == data_desejada:
-                    datas.append(data)
-                    links.append(link)
-                else:
-                    continue
-            else:
-                continue
-        else:
-            continue
-
-        # Título
-        titulo_elem = noticia.find('h4')
-        if titulo_elem:
-            titulo = titulo_elem.text.strip()
-            titulos.append(titulo)
-        else:
-            titulos.append(None)
-
-        # Descrição
-        descricao_elem = noticia.find('p', class_='acessibilidade')
-        if descricao_elem and descricao_elem.find('a'):
-            descricao = descricao_elem.find('a').text.strip()
-            descricoes.append(descricao)
-        else:
-            descricoes.append(None)
-
-    return zip(datas, titulos, descricoes, links)
-
-def salvar_na_planilha(sheet, dados):
-    linhas = []
-    for data, titulo, descricao, link in dados:
-        linhas.append([data, titulo, descricao, link])
-    sheet.append_rows(linhas, value_input_option='USER_ENTERED')
-    print('Dados inseridos com sucesso na planilha.')
-
-# Chave da planilha Google Sheets
-sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
-sheet = initialize_sheet(sheet_id, sheet_name='undime')
-
-# Data de hoje
-data_hoje = datetime.now().strftime('%d/%m/%Y')
-
-# Raspar dados das notícias da data de hoje
-dados_noticias = raspar_noticias(data_hoje)
-
-# Salvar dados na planilha
-salvar_na_planilha(sheet, dados_noticias)
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import re
-from datetime import datetime
 import pytz
 
 def initialize_sheet(sheet_id, sheet_name='Página3'):
     # Escopo e credenciais para acessar a API do Google Sheets
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('/content/raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
     return sheet
