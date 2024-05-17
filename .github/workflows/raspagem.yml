@@ -25,7 +25,14 @@ jobs:
       run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > credentials.json
       shell: bash  # Cria um arquivo de credenciais para autenticação com o Google
 
-    - name: Execute script
-      run: python raspagem_noticias.py  # Executa o script Python
+    - name: Check time and execute script
+      run: |
+        CURRENT_HOUR=$(TZ='America/Sao_Paulo' date +'%H')
+        if [ $CURRENT_HOUR -ge 8 ] && [ $CURRENT_HOUR -lt 18 ]; then
+          python raspagem_noticias.py
+        else
+          echo "Fora do horário de execução permitido (8h-18h BRT)."
+        fi
+      shell: bash
       env:  # Configura as variáveis de ambiente necessárias para o script
         GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
