@@ -415,14 +415,20 @@ def raspar_noticias_por_data(sheet, data_desejada=None, max_pages=5):
         # Monta a URL da página atual
         url = f"{base_url}{page}"
 
-        # Faz a requisição para obter o conteúdo da página
-        response = requests.get(url)
+        try:
+            # Faz a requisição para obter o conteúdo da página
+            response = requests.get(url, timeout=10)  # Timeout de 10 segundos
+            response.raise_for_status()  # Levanta uma exceção para status de erro HTTP
+        except requests.exceptions.RequestException as e:
+            print(f"Erro ao acessar a URL {url}: {e}")
+            break
+
         content = response.content
 
         # Parseia o conteúdo da página com BeautifulSoup
         soup = BeautifulSoup(content, 'html.parser')
 
-        # Encontrar todas as divs que contêm os artigos de notícias
+        # Encontrar todos os artigos de notícias
         news_items = soup.find_all('a', href=True)
 
         # Verifica se há notícias na página
@@ -445,10 +451,7 @@ def raspar_noticias_por_data(sheet, data_desejada=None, max_pages=5):
                 # Verificar se a data é igual à data desejada
                 if date == data_desejada:
                     # Armazenar os dados no formato de lista
-                    if link.startswith("http"):
-                        full_link = link
-                    else:
-                        full_link = f"https://www.consed.org.br{link}"
+                    full_link = link if link.startswith("http") else f"https://www.consed.org.br{link}"
 
                     # Verificar se a URL já foi raspada
                     if full_link not in already_scraped_urls:
@@ -474,7 +477,7 @@ def raspar_noticias_por_data(sheet, data_desejada=None, max_pages=5):
 sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'  # Chave da planilha
 sheet = initialize_sheet(sheet_id, sheet_name='consed')
 # Para raspar notícias da data atual
-raspar_noticias_por_data(sheet, max_pages=5)  # Substitua '14/05/2024' pela data desejada
+raspar_noticias_por_data(sheet, max_pages=5)
 
 """# Undime"""
 
