@@ -53,7 +53,6 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
         print(f"Data desejada: {data_desejada}")  # Adicionando ponto de depuração para verificar a data
 
     already_scraped_urls = get_already_scraped_urls(sheet)
-    print(f"Already scraped URLs: {already_scraped_urls}")
 
     response = requests.get(url)
     html_content = response.text
