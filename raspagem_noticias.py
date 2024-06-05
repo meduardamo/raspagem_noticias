@@ -17,8 +17,6 @@ import re
 from datetime import datetime
 import pytz
 
-response = requests.get(url, verify=False)
-
 """# Ministério do Esporte"""
 
 def initialize_sheet():
@@ -95,8 +93,6 @@ raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Educação"""
 
-response = requests.get(url, verify=False)
-
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -167,8 +163,6 @@ raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Saúde"""
 
-response = requests.get(url, verify=False)
-
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -234,8 +228,6 @@ url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
 raspar_noticias(url)
 
 """# Igualdade Racial"""
-
-response = requests.get(url, verify=False)
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -304,8 +296,6 @@ data_especifica = "13/05/2024"
 raspar_noticias(url)
 
 """# Povos Indígenas"""
-
-response = requests.get(url, verify=False)
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
