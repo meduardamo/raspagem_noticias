@@ -283,7 +283,6 @@ def raspar_noticias(url, data_desejada=None):
 
 # Exemplo de uso
 url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
-data_especifica = "13/05/2024"
 raspar_noticias(url)
 
 """# Povos Indígenas"""
@@ -350,7 +349,6 @@ def raspar_noticias(url, data_desejada=None):
 
 # Exemplo de uso
 url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2024/05"
-data_especifica = "07/05/2024"
 raspar_noticias(url)
 
 """# Consed"""
