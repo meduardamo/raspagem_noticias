@@ -13,9 +13,9 @@ import requests
 from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import re
 from datetime import datetime
 import pytz
+import certifi
 
 """# Ministério do Esporte"""
 
@@ -25,14 +25,31 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import pytz
+import certifi
 
-def initialize_sheet():
+# Function to initialize Google Sheets connection
+def initialize_sheet(sheet_id):
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+    sheet = client.open_by_key(sheet_id)
     return sheet
 
+# Function to fetch URL with SSL certificate verification
+def fetch_url(url):
+    try:
+        response = requests.get(url, verify=certifi.where())
+        response.raise_for_status()
+        return response
+    except requests.exceptions.SSLError as e:
+        print(f"SSL Error encountered when accessing {url}: {e}")
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error encountered for {url}: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error encountered when accessing {url}: {e}")
+    return None
+
+# Function to get already scraped URLs from a specific sheet
 def get_already_scraped_urls(sheet):
     try:
         urls_sheet = sheet.worksheet("URLs")
@@ -42,61 +59,61 @@ def get_already_scraped_urls(sheet):
     urls = urls_sheet.col_values(1)
     return set(urls[1:])  # Exclude the header
 
+# Function to add scraped URL to the sheet
 def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
     urls_sheet.append_row([url])
 
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
+# Main function to scrape news by date
+def raspar_noticias_por_data(url, sheet_id, data_desejada=None):
     if data_desejada is None:
         tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-        print(f"Data desejada: {data_desejada}")  # Adicionando ponto de depuração para verificar a data
+        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")
 
+    sheet = initialize_sheet(sheet_id)
     already_scraped_urls = get_already_scraped_urls(sheet)
 
-    response = requests.get(url)
-    html_content = response.text
-    soup = BeautifulSoup(html_content, 'html.parser')
-    meta_tag = soup.find('meta', property="og:site_name")
-    nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
-    noticias = soup.find_all('li')
+    response = fetch_url(url)
+    if response and response.status_code == 200:
+        html_content = response.text
+        soup = BeautifulSoup(html_content, 'html.parser')
 
-    for noticia in noticias:
-        data = noticia.find('span', class_='data')
-        if data:
-            data_text = data.text.strip()
-            print(f"Data da notícia: {data_text}")  # Adicionando ponto de depuração para verificar a data da notícia
-            if data_text == data_desejada:
+        meta_tag = soup.find('meta', property="og:site_name")
+        nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
+
+        noticias = soup.find_all('li')
+        for noticia in noticias:
+            data = noticia.find('span', class_='data')
+            if data and data.text.strip() == data_desejada:
                 titulo_element = noticia.find('h2', class_='titulo')
-                if titulo_element:
-                    url = titulo_element.find('a')['href']
-                    if url not in already_scraped_urls:
-                        subtitulo_element = noticia.find('div', class_='subtitulo-noticia')
-                        subtitulo = subtitulo_element.text.strip() if subtitulo_element else "Sem subtítulo"
-                        titulo = titulo_element.text.strip()
-                        descricao = noticia.find('span', class_='descricao')
-                        descricao_text = descricao.text.split('-')[1].strip() if descricao and '-' in descricao.text else (descricao.text.strip() if descricao else "Sem descrição")
+                url = titulo_element.find('a')['href'] if titulo_element else None
+                if url and url not in already_scraped_urls:
+                    subtitulo_element = noticia.find('div', class_='subtitulo-noticia')
+                    subtitulo = subtitulo_element.text.strip() if subtitulo_element else "Sem subtítulo"
+                    titulo = titulo_element.text.strip()
+                    descricao = noticia.find('span', class_='descricao')
+                    descricao_text = descricao.text.split('-')[1].strip() if descricao and '-' in descricao.text else descricao.text.strip() if descricao else "Sem descrição"
+                    
+                    dados = [
+                        data_desejada,     # Data
+                        nome_ministerio,   # Nome do Ministério
+                        subtitulo,         # Subtítulo
+                        titulo,            # Título
+                        descricao_text,    # Descrição
+                        url                # URL
+                    ]
 
-                        dados = [
-                            data_text,           # Data
-                            nome_ministerio,     # Nome do Ministério
-                            subtitulo,           # Subtítulo
-                            titulo,              # Título
-                            descricao_text,      # Descrição
-                            url                  # URL
-                        ]
+                    sheet.sheet1.append_row(dados)
+                    add_scraped_url(sheet, url)
+                    print(f"Data added for URL: {url}")
+        print('Dados inseridos com sucesso na planilha.')
+    else:
+        print(f"Failed to fetch data from {url}. Status Code: {response.status_code if response else 'No response'}")
 
-                        sheet.sheet1.append_row(dados)
-                        add_scraped_url(sheet, url)
-
-    print('Dados inseridos com sucesso na planilha.')
-
-# Exemplo de uso
-sheet = initialize_sheet()
+# Example usage
+sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
 url = "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte"
-
-# Para raspar notícias da data atual
-raspar_noticias_por_data(url, sheet)
+raspar_noticias_por_data(url, sheet_id)
 
 """# Ministério da Educação"""
 
