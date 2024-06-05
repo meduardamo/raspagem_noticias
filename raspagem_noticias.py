@@ -17,25 +17,7 @@ import re
 from datetime import datetime
 import pytz
 
-def safe_request(url, verify=True):
-    """Faz uma requisição HTTP, com a opção de desativar a verificação SSL para domínios específicos."""
-    if "gov.br" in url:
-        return requests.get(url, verify=False)
-    return requests.get(url, verify=verify)
-
-# Exemplo de uso dentro de uma função de raspagem
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
-    if data_desejada is None:
-        tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")
-        print(f"Data desejada: {data_desejada}")
-
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    response = safe_request(url)  # Usa a função centralizada para fazer a requisição
-    html_content = response.text
-    soup = BeautifulSoup(html_content, 'html.parser')
-    # Restante do código de raspagem...
+response = requests.get(url, verify=False)
 
 """# Ministério do Esporte"""
 
@@ -113,6 +95,8 @@ raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Educação"""
 
+response = requests.get(url, verify=False)
+
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -183,6 +167,8 @@ raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Saúde"""
 
+response = requests.get(url, verify=False)
+
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
@@ -248,6 +234,8 @@ url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
 raspar_noticias(url)
 
 """# Igualdade Racial"""
+
+response = requests.get(url, verify=False)
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -316,6 +304,8 @@ data_especifica = "13/05/2024"
 raspar_noticias(url)
 
 """# Povos Indígenas"""
+
+response = requests.get(url, verify=False)
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
