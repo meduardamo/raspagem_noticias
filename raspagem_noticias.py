@@ -17,6 +17,8 @@ import re
 from datetime import datetime
 import pytz
 
+response = requests.get(url, verify=False)
+
 """# Ministério do Esporte"""
 
 def initialize_sheet():
