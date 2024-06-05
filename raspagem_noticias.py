@@ -19,7 +19,7 @@ import pytz
 
 def safe_request(url, verify=True):
     """Faz uma requisição HTTP, com a opção de desativar a verificação SSL para domínios específicos."""
-    if "www.gov.br" in url:
+    if "gov.br" in url:
         return requests.get(url, verify=False)
     return requests.get(url, verify=verify)
 
