@@ -7,6 +7,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import re
 from datetime import datetime
 import pytz
+import certifi
 
 """# Ministério do Esporte"""
 
