@@ -455,7 +455,7 @@ def raspar_noticias(url, data_desejada=None):
         print("Oops: Something Else", err)
 
 # Exemplo de uso
-url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2024/08"
+url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2024/09"
 data_especifica = "08/08/2024"
 raspar_noticias(url)
 
