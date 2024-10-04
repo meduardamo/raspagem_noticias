@@ -285,6 +285,214 @@ def raspar_noticias(url, data_desejada=None):
 url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
 raspar_noticias(url)
 
+"""# ANS"""
+
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
+import urllib3
+
+# Suprimir avisos de solicitação insegura
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def initialize_sheet(sheet_url, json_keyfile):
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
+             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+
+    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
+    client = gspread.authorize(credentials)
+    sheet = client.open_by_url(sheet_url)
+    return sheet
+
+# Função para verificar URLs já raspadas
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    urls = urls_sheet.col_values(1)
+    return set(urls[1:])  # Excluir o cabeçalho
+
+# Função para adicionar uma URL já raspada
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+# Função para raspar dados da página da ANS
+def scrape_ans_news(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    data_list = []
+    news_blocks = soup.find_all('div', class_='conteudo')
+
+    for block in news_blocks:
+        # Verificar subtítulo
+        subtitulo_tag = block.find('div', class_='subtitulo-noticia')
+        subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
+        
+        # Verificar título e link
+        titulo_tag = block.find('a', href=True)
+        titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
+        link = titulo_tag['href'] if titulo_tag else 'N/A'
+        
+        # Verificar data
+        data_tag = block.find('span', class_='data')
+        data = data_tag.get_text(strip=True) if data_tag else 'N/A'
+
+        # Adicionar os dados à lista
+        data_list.append({
+            'Data': data,
+            'Subtítulo': subtitulo,
+            'Título': titulo,
+            'Link': link
+        })
+
+    return data_list
+
+# Função para exportar os dados para Google Sheets
+def export_to_google_sheets(data_list, sheet_url, json_keyfile):
+    sheet = initialize_sheet(sheet_url, json_keyfile)
+    worksheet = sheet.get_worksheet(0)
+
+    # Converter a lista de dicionários em DataFrame
+    df = pd.DataFrame(data_list)
+
+    # Limpar a aba antes de adicionar novos dados
+    worksheet.clear()
+
+    # Atualizar a aba com novos dados
+    worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+
+# Função principal para raspar e exportar os dados
+def main():
+    url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
+    sheet_url = 'https://docs.google.com/spreadsheets/d/1TK5I9_2dTwXTIK2_uLA3_W-ZCnOCubkiYKR1sH_sCAE/edit?gid=0'
+    json_keyfile = 'raspagemdou-151e0ee88b03.json'
+
+    # Executar a raspagem
+    data_list = scrape_ans_news(url)
+
+    # Exportar para Google Sheets
+    export_to_google_sheets(data_list, sheet_url, json_keyfile)
+
+if __name__ == "__main__":
+    main()
+
+"""# CFM"""
+
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from google.oauth2.service_account import Credentials
+import urllib3
+from datetime import datetime
+import pytz
+
+# Suprimir avisos de solicitação insegura
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def initialize_sheet():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+    return sheet
+
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    urls = urls_sheet.col_values(1)
+    return set(urls[1:])  # Exclude the header
+
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+def raspar_noticias(url, data_desejada=None):
+    if data_desejada is None:
+        tz = pytz.timezone('America/Sao_Paulo')
+        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
+
+    sheet = initialize_sheet()
+    already_scraped_urls = get_already_scraped_urls(sheet)
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()  # Levantará uma exceção para respostas 4xx/5xx
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        noticias = soup.find_all('div', class_='noticia')  # Ajustar para a estrutura de notícias desejada
+
+        for noticia in noticias:
+            # Capturar data da notícia
+            date_div = noticia.find('div', class_='noticia-date')
+            day_tag = date_div.find('h3') if date_div else None
+            month_year_div = date_div.find('div') if date_div else None
+
+            # Capturar o dia
+            day = day_tag.text.strip() if day_tag else 'N/A'
+
+            # Capturar o mês e o ano
+            if month_year_div:
+                month_year_parts = month_year_div.get_text(separator=" ").split()
+                if len(month_year_parts) >= 2:
+                    month = month_year_parts[0]
+                    year = month_year_parts[1]
+                else:
+                    month, year = 'N/A', 'N/A'
+            else:
+                month, year = 'N/A', 'N/A'
+
+            # Combinar dia, mês e ano em uma única string
+            data_text = f"{day} {month} {year}".strip()
+
+            # Verificar se a data é a mesma da data desejada
+            if data_text == data_desejada:
+                # Capturar título
+                titulo_tag = noticia.find('h3')
+                titulo = titulo_tag.text.strip() if titulo_tag else 'N/A'
+
+                # Capturar link
+                link_tag = noticia.find('a', class_='c-default', href=True)
+                link = link_tag['href'] if link_tag else 'N/A'
+
+                # Verificar se a URL já foi raspada
+                if link not in already_scraped_urls:
+                    # Capturar descrição
+                    description_tag = noticia.find('p')
+                    descricao = description_tag.text.strip() if description_tag else 'N/A'
+
+                    # Inserir dados na planilha
+                    sheet.sheet1.append_row([data_text, titulo, descricao, link])
+                    add_scraped_url(sheet, link)
+
+        print('Dados inseridos com sucesso na planilha.')
+
+    except requests.exceptions.HTTPError as errh:
+        print("Http Error:", errh)
+    except requests.exceptions.ConnectionError as errc:
+        print("Error Connecting:", errc)
+    except requests.exceptions.Timeout as errt:
+        print("Timeout Error:", errt)
+    except requests.exceptions.RequestException as err:
+        print("Oops: Something Else", err)
+
+# Exemplo de uso
+url = "https://portal.cfm.org.br/noticias/?s="
+raspar_noticias(url)
+
 """# Igualdade Racial"""
 
 # Suprimir avisos de solicitação insegura
@@ -455,9 +663,86 @@ def raspar_noticias(url, data_desejada=None):
         print("Oops: Something Else", err)
 
 # Exemplo de uso
-url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2024/09"
+url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2024/10"
 data_especifica = "08/08/2024"
 raspar_noticias(url)
+
+"""# ANS"""
+
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
+
+# Função para raspar dados da página da ANS
+def scrape_ans_news(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    data_list = []
+
+    # Encontre todos os blocos de notícias
+    news_blocks = soup.find_all('div', class_='conteudo')
+
+    for block in news_blocks:
+        # Verificar se o subtítulo existe antes de tentar acessar seu texto
+        subtitulo_tag = block.find('div', class_='subtitulo-noticia')
+        subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
+        
+        # Verificar se o título e o link existem antes de tentar acessá-los
+        titulo_tag = block.find('a', href=True)
+        titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
+        link = titulo_tag['href'] if titulo_tag else 'N/A'
+        
+        # Verificar se a data existe antes de tentar acessar seu texto
+        data_tag = block.find('span', class_='data')
+        data = data_tag.get_text(strip=True) if data_tag else 'N/A'
+
+        # Adicionar os dados à lista
+        data_list.append({
+            'Data': data,
+            'Subtítulo': subtitulo,
+            'Título': titulo,
+            'Link': link
+        })
+
+    return data_list
+
+# Autenticar e acessar a planilha do Google Sheets
+def export_to_google_sheets(data_list, sheet_url, json_keyfile):
+    # Configurações da API do Google Sheets
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
+             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+
+    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
+    client = gspread.authorize(credentials)
+
+    # Acessar a planilha e aba específica
+    sheet = client.open_by_url(sheet_url)
+    worksheet = sheet.get_worksheet(0)
+
+    # Converter a lista de dicionários em DataFrame para fácil manipulação
+    df = pd.DataFrame(data_list)
+
+    # Limpar a aba antes de adicionar novos dados
+    worksheet.clear()
+
+    # Atualizar a aba com novos dados
+    worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+
+# URL da página da ANS
+url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
+
+# Planilha Google Sheets (atualizada para o novo link fornecido)
+sheet_url = 'https://docs.google.com/spreadsheets/d/1TK5I9_2dTwXTIK2_uLA3_W-ZCnOCubkiYKR1sH_sCAE/edit?gid=0'
+
+# Caminho para o arquivo JSON de credenciais
+json_keyfile = 'raspagemdou-151e0ee88b03.json'
+
+# Executar a raspagem e exportar para Google Sheets
+data_list = scrape_ans_news(url)
+export_to_google_sheets(data_list, sheet_url, json_keyfile)
 
 """# Consed"""
 
