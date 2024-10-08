@@ -8,6 +8,7 @@ from datetime import datetime
 import pytz
 import urllib3
 import re
+import pandas as pd
 
 """# Ministério do Esporte"""
 
