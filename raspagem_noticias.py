@@ -721,7 +721,7 @@ def export_to_google_sheets(data_list, sheet_url, json_keyfile):
 
     # Acessar a planilha e aba específica
     sheet = client.open_by_url(sheet_url)
-    worksheet = sheet.get_worksheet(0)
+    worksheet = sheet.worksheet('ans')
 
     # Converter a lista de dicionários em DataFrame para fácil manipulação
     df = pd.DataFrame(data_list)
@@ -736,7 +736,7 @@ def export_to_google_sheets(data_list, sheet_url, json_keyfile):
 url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
 
 # Planilha Google Sheets (atualizada para o novo link fornecido)
-sheet_url = 'https://docs.google.com/spreadsheets/d/1TK5I9_2dTwXTIK2_uLA3_W-ZCnOCubkiYKR1sH_sCAE/edit?gid=0'
+sheet_url = 'https://docs.google.com/spreadsheets/d/1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY/edit?gid=0#gid=0'
 
 # Caminho para o arquivo JSON de credenciais
 json_keyfile = 'raspagemdou-151e0ee88b03.json'
