@@ -357,7 +357,7 @@ def scrape_ans_news(url):
 # Função para exportar os dados para Google Sheets
 def export_to_google_sheets(data_list, sheet_url, json_keyfile):
     sheet = initialize_sheet(sheet_url, json_keyfile)
-    worksheet = sheet.get_worksheet(0)
+    worksheet = sheet.worksheet('ans')
 
     # Converter a lista de dicionários em DataFrame
     df = pd.DataFrame(data_list)
@@ -371,7 +371,7 @@ def export_to_google_sheets(data_list, sheet_url, json_keyfile):
 # Função principal para raspar e exportar os dados
 def main():
     url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
-    sheet_url = 'https://docs.google.com/spreadsheets/d/1TK5I9_2dTwXTIK2_uLA3_W-ZCnOCubkiYKR1sH_sCAE/edit?gid=0'
+    sheet_url = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
     json_keyfile = 'raspagemdou-151e0ee88b03.json'
 
     # Executar a raspagem
