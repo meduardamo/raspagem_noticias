@@ -298,13 +298,13 @@ import urllib3
 # Suprimir avisos de solicitação insegura
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def initialize_sheet(sheet_url, json_keyfile):
+def initialize_sheet(sheet_id, json_keyfile):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
              "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
 
     credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
     client = gspread.authorize(credentials)
-    sheet = client.open_by_url(sheet_url)
+    sheet = client.open_by_key(sheet_id)  # Utilizando open_by_key para evitar erros de extração de URL
     return sheet
 
 # Função para verificar URLs já raspadas
@@ -324,7 +324,7 @@ def add_scraped_url(sheet, url):
 
 # Função para raspar dados da página da ANS
 def scrape_ans_news(url):
-    response = requests.get(url)
+    response = requests.get(url, verify=False)
     soup = BeautifulSoup(response.content, 'html.parser')
 
     data_list = []
@@ -355,9 +355,9 @@ def scrape_ans_news(url):
     return data_list
 
 # Função para exportar os dados para Google Sheets
-def export_to_google_sheets(data_list, sheet_url, json_keyfile):
-    sheet = initialize_sheet(sheet_url, json_keyfile)
-    worksheet = sheet.worksheet('ans')
+def export_to_google_sheets(data_list, sheet_id, json_keyfile):
+    sheet = initialize_sheet(sheet_id, json_keyfile)
+    worksheet = sheet.worksheet('ans')  # Seleciona a aba 'ans'
 
     # Converter a lista de dicionários em DataFrame
     df = pd.DataFrame(data_list)
@@ -371,18 +371,18 @@ def export_to_google_sheets(data_list, sheet_url, json_keyfile):
 # Função principal para raspar e exportar os dados
 def main():
     url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
-    sheet_url = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
+    sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'  # Use a ID da planilha diretamente
     json_keyfile = 'raspagemdou-151e0ee88b03.json'
 
     # Executar a raspagem
     data_list = scrape_ans_news(url)
 
     # Exportar para Google Sheets
-    export_to_google_sheets(data_list, sheet_url, json_keyfile)
+    export_to_google_sheets(data_list, sheet_id, json_keyfile)
 
 if __name__ == "__main__":
     main()
-
+    
 """# CFM"""
 
 import requests
