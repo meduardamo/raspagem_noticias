@@ -459,8 +459,23 @@ def raspar_noticias(url, data_desejada=None):
             # Combinar dia, mês e ano em uma única string
             data_text = f"{day} {month} {year}".strip()
 
+            # Dicionário de conversão de mês por extenso para número
+            meses = {
+                'janeiro': '01', 'fevereiro': '02', 'março': '03', 'abril': '04',
+                'maio': '05', 'junho': '06', 'julho': '07', 'agosto': '08',
+                'setembro': '09', 'outubro': '10', 'novembro': '11', 'dezembro': '12'
+            }
+
+            # Converter a data para o formato DD/MM/YYYY
+            try:
+                dia = day.zfill(2)
+                mes_num = meses.get(month.lower())
+                data_convertida = f"{dia}/{mes_num}/{year}" if mes_num else None
+            except Exception:
+                data_convertida = None
+
             # Verificar se a data é a mesma da data desejada
-            if data_text == data_desejada:
+            if data_convertida == data_desejada:
                 # Capturar título
                 titulo_tag = noticia.find('h3')
                 titulo = titulo_tag.text.strip() if titulo_tag else 'N/A'
@@ -476,7 +491,7 @@ def raspar_noticias(url, data_desejada=None):
                     descricao = description_tag.text.strip() if description_tag else 'N/A'
 
                     # Inserir dados na planilha
-                    sheet.sheet1.append_row([data_text, titulo, descricao, link])
+                    sheet.sheet1.append_row([data_convertida, titulo, descricao, link])
                     add_scraped_url(sheet, link)
 
         print('Dados inseridos com sucesso na planilha.')
