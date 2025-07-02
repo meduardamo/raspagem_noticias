@@ -468,7 +468,7 @@ def export_to_google_sheets(data_list, sheet_id, json_keyfile):
 def main():
     url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
     sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
-    json_keyfile = 'raspagemdou-151e0ee88b03.json'
+    json_keyfile = ''credentials.json'
 
     data_list = scrape_ans_news(url)
     export_to_google_sheets(data_list, sheet_id, json_keyfile)
@@ -617,7 +617,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name(''credentials.json', scope)
     client = gspread.authorize(creds)
     return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
 
@@ -845,7 +845,7 @@ url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
 sheet_url = 'https://docs.google.com/spreadsheets/d/1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY/edit?gid=0#gid=0'
 
 # Caminho para o arquivo JSON de credenciais
-json_keyfile = 'raspagemdou-151e0ee88b03.json'
+json_keyfile = 'credentials.json'
 
 # Executar a raspagem e exportar para Google Sheets
 data_list = scrape_ans_news(url)
