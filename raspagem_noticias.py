@@ -766,6 +766,89 @@ json_keyfile = 'raspagemdou-151e0ee88b03.json'
 data_list = scrape_ans_news(url)
 export_to_google_sheets(data_list, sheet_url, json_keyfile)
 
+# ANVISA – Raspagem de notícias do dia atual
+
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+import pytz
+import urllib3
+
+# Suprimir avisos SSL
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def initialize_sheet():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    client = gspread.authorize(creds)
+    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    urls = urls_sheet.col_values(1)
+    return set(urls[1:])
+
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+def raspar_anvisa_do_dia(sheet):
+    tz = pytz.timezone('America/Sao_Paulo')
+    data_hoje = datetime.now(tz).strftime("%d/%m/%Y")
+    url = 'https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, verify=False, timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao acessar a Anvisa: {e}")
+        return
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+    noticias = soup.select('ul.noticias.listagem-noticias-com-foto > li')
+    urls_existentes = get_already_scraped_urls(sheet)
+
+    for noticia in noticias:
+        titulo_tag = noticia.find('h2', class_='titulo').find('a')
+        if not titulo_tag:
+            continue
+
+        titulo = titulo_tag.text.strip()
+        link = titulo_tag['href']
+        if link in urls_existentes:
+            continue
+
+        subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
+        subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
+
+        descricao_tag = noticia.find('span', class_='descricao')
+        if descricao_tag:
+            descricao_completa = descricao_tag.text.strip()
+            partes = descricao_completa.split('-')
+            data_lida = partes[0].strip()
+            descricao = partes[1].strip() if len(partes) > 1 else descricao_completa
+        else:
+            continue
+
+        if data_lida == data_hoje:
+            sheet.worksheet("anvisa").append_row([
+                data_lida, "ANVISA", subtitulo, titulo, descricao, link
+            ])
+            add_scraped_url(sheet, link)
+
+    print("✅ Notícias da Anvisa do dia atual inseridas com sucesso.")
+
+# Executar
+sheet = initialize_sheet()
+raspar_anvisa_do_dia(sheet)
+
 """# Consed"""
 
 def initialize_sheet(sheet_id, sheet_name='Página2'):
