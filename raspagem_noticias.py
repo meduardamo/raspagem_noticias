@@ -493,8 +493,7 @@ def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
+    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
 
 def get_already_scraped_urls(sheet):
     try:
@@ -503,7 +502,7 @@ def get_already_scraped_urls(sheet):
         urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
         urls_sheet.append_row(["URLs"])
     urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
+    return set(urls[1:])
 
 def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
@@ -512,93 +511,79 @@ def add_scraped_url(sheet, url):
 def raspar_noticias(url, data_desejada=None):
     if data_desejada is None:
         tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
+        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")
 
     sheet = initialize_sheet()
     already_scraped_urls = get_already_scraped_urls(sheet)
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     }
 
     try:
         response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Levantará uma exceção para respostas 4xx/5xx
+        response.raise_for_status()
 
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        noticias = soup.find_all('div', class_='noticia')  # Ajustar para a estrutura de notícias desejada
+        noticias = soup.find_all('div', class_='noticia')
 
         for noticia in noticias:
-            # Capturar data da notícia
             date_div = noticia.find('div', class_='noticia-date')
-            day_tag = date_div.find('h3') if date_div else None
-            month_year_div = date_div.find('div') if date_div else None
+            if not date_div:
+                continue
 
-            # Capturar o dia
-            day = day_tag.text.strip() if day_tag else 'N/A'
+            # Dia
+            day_tag = date_div.find('h3')
+            day = day_tag.text.strip() if day_tag else None
 
-            # Capturar o mês e o ano
-            if month_year_div:
-                month_year_parts = month_year_div.get_text(separator=" ").split()
-                if len(month_year_parts) >= 2:
-                    month = month_year_parts[0]
-                    year = month_year_parts[1]
-                else:
-                    month, year = 'N/A', 'N/A'
+            # Mês e ano
+            sub_divs = date_div.find_all('div')
+            if not sub_divs:
+                continue
+
+            month_year_text = sub_divs[0].get_text(separator=' ').strip()
+            parts = month_year_text.split()
+
+            if len(parts) >= 2:
+                month = parts[0].lower()[:3]  # "Jul" → "jul"
+                year = parts[1]
             else:
-                month, year = 'N/A', 'N/A'
+                continue
 
-            # Combinar dia, mês e ano em uma única string
-            data_text = f"{day} {month} {year}".strip()
-
-            # Dicionário de conversão de mês por extenso para número
             meses = {
-                'janeiro': '01', 'fevereiro': '02', 'março': '03', 'abril': '04',
-                'maio': '05', 'junho': '06', 'julho': '07', 'agosto': '08',
-                'setembro': '09', 'outubro': '10', 'novembro': '11', 'dezembro': '12'
+                'jan': '01', 'fev': '02', 'mar': '03', 'abr': '04',
+                'mai': '05', 'jun': '06', 'jul': '07', 'ago': '08',
+                'set': '09', 'out': '10', 'nov': '11', 'dez': '12'
             }
 
-            # Converter a data para o formato DD/MM/YYYY
-            try:
-                dia = day.zfill(2)
-                mes_num = meses.get(month.lower())
-                data_convertida = f"{dia}/{mes_num}/{year}" if mes_num else None
-            except Exception:
-                data_convertida = None
+            mes_num = meses.get(month)
+            if not mes_num or not day or not year:
+                continue
 
-            # Verificar se a data é a mesma da data desejada
-            if data_convertida == data_desejada:
-                # Capturar título
+            data_formatada = f"{day.zfill(2)}/{mes_num}/{year}"
+
+            if data_formatada == data_desejada:
                 titulo_tag = noticia.find('h3')
-                titulo = titulo_tag.text.strip() if titulo_tag else 'N/A'
+                titulo = titulo_tag.text.strip() if titulo_tag else 'Título não encontrado'
 
-                # Capturar link
                 link_tag = noticia.find('a', class_='c-default', href=True)
-                link = link_tag['href'] if link_tag else 'N/A'
+                link = link_tag['href'] if link_tag else 'Link não encontrado'
 
-                # Verificar se a URL já foi raspada
-                if link not in already_scraped_urls:
-                    # Capturar descrição
-                    description_tag = noticia.find('p')
-                    descricao = description_tag.text.strip() if description_tag else 'N/A'
+                if link in already_scraped_urls:
+                    continue
 
-                    # Inserir dados na planilha
-                    sheet.sheet1.append_row([data_convertida, titulo, descricao, link])
-                    add_scraped_url(sheet, link)
+                descricao_tag = noticia.find('p')
+                descricao = descricao_tag.text.strip() if descricao_tag else 'Descrição não encontrada'
 
-        print('Dados inseridos com sucesso na planilha.')
+                sheet.sheet1.append_row([data_formatada, "CFM", "", titulo, descricao, link])
+                add_scraped_url(sheet, link)
 
-    except requests.exceptions.HTTPError as errh:
-        print("Http Error:", errh)
-    except requests.exceptions.ConnectionError as errc:
-        print("Error Connecting:", errc)
-    except requests.exceptions.Timeout as errt:
-        print("Timeout Error:", errt)
-    except requests.exceptions.RequestException as err:
-        print("Oops: Something Else", err)
+        print("✅ Notícias do CFM inseridas com sucesso.")
 
-# Exemplo de uso
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao acessar o site do CFM: {e}")
+
+# Executar
 url = "https://portal.cfm.org.br/noticias/?s="
 raspar_noticias(url)
 
