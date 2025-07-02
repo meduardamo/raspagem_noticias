@@ -286,6 +286,97 @@ def raspar_noticias(url, data_desejada=None):
 url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
 raspar_noticias(url)
 
+"""# Povos Indígenas - Notícias do dia"""
+
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+import pytz
+import urllib3
+
+# Suprimir avisos de solicitação insegura
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def initialize_sheet():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+    return sheet
+
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    urls = urls_sheet.col_values(1)
+    return set(urls[1:])
+
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+def raspar_noticias(url):
+    # Data de hoje no formato brasileiro
+    tz = pytz.timezone('America/Sao_Paulo')
+    data_hoje = datetime.now(tz).strftime("%d/%m/%Y")
+
+    sheet = initialize_sheet()
+    already_scraped_urls = get_already_scraped_urls(sheet)
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        noticias = soup.find_all('article', class_='entry')
+
+        nome_ministerio_tag = soup.find('a', href="https://www.gov.br/povosindigenas/pt-br")
+        nome_ministerio = nome_ministerio_tag.text.strip() if nome_ministerio_tag else "Ministério dos Povos Indígenas"
+
+        for noticia in noticias:
+            titulo_tag = noticia.find('span', class_='summary').find('a')
+            titulo = titulo_tag.text.strip() if titulo_tag else "Título não disponível"
+            link = titulo_tag['href'] if titulo_tag else "Link não disponível"
+
+            data_tag = noticia.find('span', class_='documentByLine')
+            if not data_tag:
+                continue
+
+            texto_data = data_tag.text.strip()
+            if "última modificação" in texto_data:
+                partes = texto_data.split("última modificação")
+                data_raw = partes[-1].strip().split()[0]  # Tenta pegar a data
+
+                try:
+                    data_formatada = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
+                except ValueError:
+                    continue  # Ignora se a data for inválida
+
+                # ✅ Verifica se é do dia atual
+                if data_formatada == data_hoje and link not in already_scraped_urls:
+                    descricao_tag = noticia.find('p', class_='description discreet')
+                    descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
+
+                    sheet.sheet1.append_row([data_formatada, nome_ministerio, "Não disponível", titulo, descricao, link])
+                    add_scraped_url(sheet, link)
+
+        print('Raspagem concluída com sucesso.')
+
+    except requests.exceptions.RequestException as err:
+        print(f"Erro ao acessar o site: {err}")
+
+url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1"
+raspar_noticias(url)
+
+
 """# ANS"""
 
 import requests
@@ -596,9 +687,6 @@ def raspar_noticias(url, data_desejada=None):
 # Exemplo de uso
 url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
 data_especifica = "22/05/2024"
-raspar_noticias(url)
-
-url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1"
 raspar_noticias(url)
 
 """# ANS"""
