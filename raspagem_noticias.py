@@ -294,20 +294,23 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import urllib3
+import certifi
 
-# Suprimir avisos de solicitação insegura
+# Suprimir avisos de solicitação insegura (ainda útil caso haja sites inseguros, mas não usado no ANS)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def initialize_sheet(sheet_id, json_keyfile):
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
-             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive"
+    ]
     credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
     client = gspread.authorize(credentials)
-    sheet = client.open_by_key(sheet_id)  # Utilizando open_by_key para evitar erros de extração de URL
+    sheet = client.open_by_key(sheet_id)
     return sheet
 
-# Função para verificar URLs já raspadas
 def get_already_scraped_urls(sheet):
     try:
         urls_sheet = sheet.worksheet("URLs")
@@ -315,36 +318,35 @@ def get_already_scraped_urls(sheet):
         urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
         urls_sheet.append_row(["URLs"])
     urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Excluir o cabeçalho
+    return set(urls[1:])
 
-# Função para adicionar uma URL já raspada
 def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
     urls_sheet.append_row([url])
 
-# Função para raspar dados da página da ANS
 def scrape_ans_news(url):
-    response = requests.get(url, verify=False)
-    soup = BeautifulSoup(response.content, 'html.parser')
+    try:
+        response = requests.get(url, verify=certifi.where(), timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao acessar a URL {url}: {e}")
+        return []
 
+    soup = BeautifulSoup(response.content, 'html.parser')
     data_list = []
     news_blocks = soup.find_all('div', class_='conteudo')
 
     for block in news_blocks:
-        # Verificar subtítulo
         subtitulo_tag = block.find('div', class_='subtitulo-noticia')
         subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
-        
-        # Verificar título e link
+
         titulo_tag = block.find('a', href=True)
         titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
         link = titulo_tag['href'] if titulo_tag else 'N/A'
-        
-        # Verificar data
+
         data_tag = block.find('span', class_='data')
         data = data_tag.get_text(strip=True) if data_tag else 'N/A'
 
-        # Adicionar os dados à lista
         data_list.append({
             'Data': data,
             'Subtítulo': subtitulo,
@@ -354,30 +356,30 @@ def scrape_ans_news(url):
 
     return data_list
 
-# Função para exportar os dados para Google Sheets
 def export_to_google_sheets(data_list, sheet_id, json_keyfile):
     sheet = initialize_sheet(sheet_id, json_keyfile)
-    worksheet = sheet.worksheet('ans')  # Seleciona a aba 'ans'
+    worksheet_name = "ans"
 
-    # Converter a lista de dicionários em DataFrame
+    try:
+        worksheet = sheet.worksheet(worksheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        worksheet = sheet.add_worksheet(title=worksheet_name, rows="100", cols="4")
+
     df = pd.DataFrame(data_list)
 
-    # Limpar a aba antes de adicionar novos dados
     worksheet.clear()
+    if not df.empty:
+        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        print("Dados inseridos com sucesso na aba 'ans'.")
+    else:
+        print("Nenhum dado encontrado para inserir.")
 
-    # Atualizar a aba com novos dados
-    worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-
-# Função principal para raspar e exportar os dados
 def main():
     url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
-    sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'  # Use a ID da planilha diretamente
+    sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
     json_keyfile = 'raspagemdou-151e0ee88b03.json'
 
-    # Executar a raspagem
     data_list = scrape_ans_news(url)
-
-    # Exportar para Google Sheets
     export_to_google_sheets(data_list, sheet_id, json_keyfile)
 
 if __name__ == "__main__":
