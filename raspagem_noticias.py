@@ -602,6 +602,91 @@ def raspar_noticias(url, data_desejada=None):
 url = "https://portal.cfm.org.br/noticias/?s="
 raspar_noticias(url)
 
+"""# FIOCRUZ"""
+
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import pytz
+import urllib3
+
+# Suprimir avisos de solicitação insegura
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def initialize_sheet():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name('raspagemdou-151e0ee88b03.json', scope)
+    client = gspread.authorize(creds)
+    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    return set(urls_sheet.col_values(1)[1:])
+
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+def raspar_fiocruz(sheet):
+    tz = pytz.timezone('America/Sao_Paulo')
+    data_desejada = datetime.now(tz).strftime("%d/%m/%Y")
+    url = "https://fiocruz.br/noticias"
+
+    try:
+        response = requests.get(url, verify=False, timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao acessar Fiocruz: {e}")
+        return
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    blocos = soup.select("div.views-row")
+    urls_existentes = get_already_scraped_urls(sheet)
+
+    try:
+        aba = sheet.worksheet("fiocruz")
+    except gspread.exceptions.WorksheetNotFound:
+        aba = sheet.add_worksheet(title="fiocruz", rows="100", cols="6")
+        aba.append_row(["Data", "Título", "Descrição", "Link"])
+
+    novas_linhas = []
+    for bloco in blocos:
+        data_tag = bloco.find("div", class_="data-busca")
+        if not data_tag:
+            continue
+        data = data_tag.find("time").text.strip()
+        if data != data_desejada:
+            continue
+
+        titulo_tag = bloco.find("div", class_="titulo-busca").find("a")
+        titulo = titulo_tag.text.strip()
+        link = "https://www.fiocruz.br" + titulo_tag["href"]
+
+        if link in urls_existentes:
+            continue
+
+        chamada_tag = bloco.find("div", class_="chamada-busca")
+        descricao = chamada_tag.text.strip() if chamada_tag else ""
+
+        novas_linhas.append([data, titulo, descricao, link])
+        add_scraped_url(sheet, link)
+
+    if novas_linhas:
+        aba.append_rows(novas_linhas)
+        print(f"✅ {len(novas_linhas)} notícia(s) da Fiocruz adicionadas.")
+    else:
+        print("⚠️ Nenhuma nova notícia da Fiocruz para hoje.")
+
+# Executar
+sheet = initialize_sheet()
+raspar_fiocruz(sheet)
+
 """# Igualdade Racial"""
 
 # Suprimir avisos de solicitação insegura
