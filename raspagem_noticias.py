@@ -468,7 +468,7 @@ def export_to_google_sheets(data_list, sheet_id, json_keyfile):
 def main():
     url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
     sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
-    json_keyfile = ''credentials.json'
+    json_keyfile = 'credentials.json'
 
     data_list = scrape_ans_news(url)
     export_to_google_sheets(data_list, sheet_id, json_keyfile)
