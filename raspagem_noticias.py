@@ -1048,7 +1048,15 @@ sheet = initialize_sheet(sheet_id, sheet_name='consed')
 # Para raspar notícias da data atual
 raspar_noticias_por_data(sheet, max_pages=5)
 
-"""# Undime"""
+# Undime
+
+import re
+import pytz
+import gspread
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+from oauth2client.service_account import ServiceAccountCredentials
 
 def initialize_sheet(sheet_id, sheet_name='Página3'):
     # Escopo e credenciais para acessar a API do Google Sheets
@@ -1065,7 +1073,7 @@ def get_already_scraped_urls(sheet, url_sheet_name="URLs"):
         urls_sheet = sheet.spreadsheet.add_worksheet(title=url_sheet_name, rows="1", cols="1")
         urls_sheet.append_row(["URLs"])
     urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
+    return set(urls[1:])  # Exclui o cabeçalho
 
 def add_scraped_url(sheet, url, url_sheet_name="URLs"):
     urls_sheet = sheet.spreadsheet.worksheet(url_sheet_name)
@@ -1104,7 +1112,7 @@ def raspar_noticias(data_desejada, sheet):
                 if data == data_desejada:
                     datas.append(data)
                     links.append(link)
-                    add_scraped_url(sheet, link)  # Adicionar URL à lista de URLs raspadas
+                    add_scraped_url(sheet, link)  # Adiciona URL à lista de URLs raspadas
                 else:
                     continue
             else:
@@ -1120,13 +1128,13 @@ def raspar_noticias(data_desejada, sheet):
         else:
             titulos.append(None)
 
-        # Descrição
-        descricao_elem = noticia.find('p', class_='acessibilidade')
-        if descricao_elem and descricao_elem.find('a'):
-            descricao = descricao_elem.find('a').text.strip()
-            descricoes.append(descricao)
-        else:
-            descricoes.append(None)
+        # Descrição — CORRIGIDO
+        try:
+            descricao_elem = noticia.select_one('p.acessibilidade > a')
+            descricao = descricao_elem.text.strip() if descricao_elem else None
+        except:
+            descricao = None
+        descricoes.append(descricao)
 
     return zip(datas, titulos, descricoes, links)
 
