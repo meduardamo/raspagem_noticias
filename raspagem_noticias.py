@@ -376,8 +376,7 @@ def raspar_noticias(url):
 url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1"
 raspar_noticias(url)
 
-
-"""# ANS"""
+# ANS
 
 import requests
 from bs4 import BeautifulSoup
@@ -387,7 +386,7 @@ import pandas as pd
 import urllib3
 import certifi
 
-# Suprimir avisos de solicitação insegura (ainda útil caso haja sites inseguros, mas não usado no ANS)
+# Suprimir avisos de solicitação insegura (útil para sites sem HTTPS completo, não é o caso aqui)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def initialize_sheet(sheet_id, json_keyfile):
@@ -415,7 +414,7 @@ def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
     urls_sheet.append_row([url])
 
-def scrape_ans_news(url):
+def scrape_ans_news(url, sheet):
     try:
         response = requests.get(url, verify=certifi.where(), timeout=10)
         response.raise_for_status()
@@ -427,21 +426,40 @@ def scrape_ans_news(url):
     data_list = []
     news_blocks = soup.find_all('div', class_='conteudo')
 
+    already_scraped = get_already_scraped_urls(sheet)
+
     for block in news_blocks:
+        # Subtítulo
         subtitulo_tag = block.find('div', class_='subtitulo-noticia')
         subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
 
+        # Título e link
         titulo_tag = block.find('a', href=True)
         titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
         link = titulo_tag['href'] if titulo_tag else 'N/A'
 
+        # Pular se já foi raspado
+        if link in already_scraped:
+            continue
+        add_scraped_url(sheet, link)
+
+        # Data
         data_tag = block.find('span', class_='data')
         data = data_tag.get_text(strip=True) if data_tag else 'N/A'
+
+        # Descrição
+        descricao_tag = block.find('span', class_='descricao')
+        descricao = 'N/A'
+        if descricao_tag:
+            full_text = descricao_tag.get_text(strip=True)
+            data_text = data_tag.get_text(strip=True) if data_tag else ''
+            descricao = full_text.replace(data_text, '').strip()
 
         data_list.append({
             'Data': data,
             'Subtítulo': subtitulo,
             'Título': titulo,
+            'Descrição': descricao,
             'Link': link
         })
 
@@ -454,7 +472,7 @@ def export_to_google_sheets(data_list, sheet_id, json_keyfile):
     try:
         worksheet = sheet.worksheet(worksheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        worksheet = sheet.add_worksheet(title=worksheet_name, rows="100", cols="4")
+        worksheet = sheet.add_worksheet(title=worksheet_name, rows="100", cols="5")
 
     df = pd.DataFrame(data_list)
 
@@ -463,14 +481,15 @@ def export_to_google_sheets(data_list, sheet_id, json_keyfile):
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
         print("Dados inseridos com sucesso na aba 'ans'.")
     else:
-        print("Nenhum dado encontrado para inserir.")
+        print("Nenhum dado novo para inserir.")
 
 def main():
     url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
     sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
     json_keyfile = 'credentials.json'
 
-    data_list = scrape_ans_news(url)
+    sheet = initialize_sheet(sheet_id, json_keyfile)
+    data_list = scrape_ans_news(url, sheet)
     export_to_google_sheets(data_list, sheet_id, json_keyfile)
 
 if __name__ == "__main__":
