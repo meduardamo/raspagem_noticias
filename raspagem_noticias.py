@@ -69,7 +69,8 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
                     titulo_element = noticia.find('h2', class_='titulo')
                     url = titulo_element.find('a')['href']
                     if url not in already_scraped_urls:
-                        subtitulo = noticia.find('div', class_='subtitulo-noticia').text.strip()
+                        subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
+                        subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
                         titulo = titulo_element.text.strip()
                         descricao = noticia.find('span', class_='descricao')
                         descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
