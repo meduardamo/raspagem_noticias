@@ -1215,7 +1215,7 @@ from google.oauth2.service_account import Credentials
 import gspread
 from datetime import datetime
 
-def limpar_apostrofos_coluna_data(sheet_id, cred_path):
+def corrigir_colunas_data_para_tipo_date(sheet_id, cred_path):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(cred_path, scopes=scope)
     client = gspread.authorize(creds)
@@ -1239,33 +1239,29 @@ def limpar_apostrofos_coluna_data(sheet_id, cred_path):
         alterado = False
 
         for linha in dados[1:]:
-            # Garante que a linha tem colunas suficientes
             while len(linha) < len(header):
                 linha.append("")
 
-            valor = linha[idx_data].strip()
+            valor = linha[idx_data].strip().lstrip("'")
 
-            if valor.startswith("'"):
-                valor = valor.lstrip("'")
-                try:
-                    # Validar que é uma data no formato dd/mm/yyyy
-                    datetime.strptime(valor, "%d/%m/%Y")
-                    linha[idx_data] = valor
-                    alterado = True
-                except:
-                    pass
+            try:
+                dt = datetime.strptime(valor, "%d/%m/%Y").date()
+                linha[idx_data] = dt  # ⬅️ tipo datetime.date (não string!)
+                alterado = True
+            except:
+                pass
 
             novas_linhas.append(linha)
 
         if alterado:
             aba.clear()
             aba.update(novas_linhas)
-            print(f"✅ Coluna 'Data' corrigida na aba '{aba.title}'")
+            print(f"✅ Coluna 'Data' convertida para tipo real na aba '{aba.title}'")
         else:
-            print(f"✔️ Nada para corrigir na aba '{aba.title}'")
+            print(f"✔️ Nenhuma conversão necessária na aba '{aba.title}'")
 
-# ⚙️ Exemplo de uso
-limpar_apostrofos_coluna_data(
+# Exemplo de uso
+corrigir_colunas_data_para_tipo_date(
     sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
     cred_path='credentials.json'
 )
