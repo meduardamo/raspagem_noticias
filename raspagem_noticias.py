@@ -1211,62 +1211,46 @@ dados_noticias = raspar_noticias(data_hoje, sheet)
 # Salvar dados na planilha
 salvar_na_planilha(sheet, dados_noticias)
 
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 import gspread
+from google.oauth2.service_account import Credentials
+from datetime import datetime
 
-def format_all_data_columns_as_date(sheet_id, json_keyfile):
+def corrigir_formatos_de_data(sheet_id, aba_nome='Página1'):
+    # Escopos e credenciais
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
-    gc = gspread.authorize(credentials)
-    service = build('sheets', 'v4', credentials=credentials)
+    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+    client = gspread.authorize(creds)
 
-    spreadsheet = gc.open_by_key(sheet_id)
-    spreadsheet_info = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-    sheets = spreadsheet_info['sheets']
+    # Abrir planilha e aba
+    sheet = client.open_by_key(sheet_id)
+    aba = sheet.worksheet(aba_nome)
 
-    for sheet_info in sheets:
-        sheet_title = sheet_info['properties']['title']
-        sheet_id_internal = sheet_info['properties']['sheetId']
+    # Buscar todos os dados
+    dados = aba.get_all_values()
 
-        worksheet = spreadsheet.worksheet(sheet_title)
+    # Achar o índice da coluna "Data"
+    header = dados[0]
+    if "Data" not in header:
+        raise Exception("Coluna 'Data' não encontrada.")
+    idx_data = header.index("Data")
+
+    # Corrigir os dados
+    novas_linhas = [header]  # Manter o cabeçalho
+    for linha in dados[1:]:
+        if len(linha) <= idx_data:
+            novas_linhas.append(linha)
+            continue
+        data_str = linha[idx_data].strip().lstrip("'")  # Remove apóstrofo manualmente
         try:
-            headers = worksheet.row_values(1)
+            dt = datetime.strptime(data_str, "%d/%m/%Y")
+            linha[idx_data] = dt.strftime("%d/%m/%Y")  # Deixar como texto "limpo"
         except:
-            continue  # pular abas vazias
+            pass  # Se não for uma data válida, mantém como está
+        novas_linhas.append(linha)
 
-        requests = []
-        for idx, col_name in enumerate(headers):
-            if col_name.strip().lower() == "data":
-                requests.append({
-                    "repeatCell": {
-                        "range": {
-                            "sheetId": sheet_id_internal,
-                            "startRowIndex": 1,
-                            "startColumnIndex": idx,
-                            "endColumnIndex": idx + 1
-                        },
-                        "cell": {
-                            "userEnteredFormat": {
-                                "numberFormat": {
-                                    "type": "DATE",
-                                    "pattern": "dd/mm/yyyy"
-                                }
-                            }
-                        },
-                        "fields": "userEnteredFormat.numberFormat"
-                    }
-                })
+    # Regravar tudo (pode sobrescrever, então cuidado)
+    aba.clear()
+    aba.update(novas_linhas)
 
-        if requests:
-            body = {"requests": requests}
-            service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
-            print(f"✅ Coluna(s) 'Data' formatada(s) na aba '{sheet_title}'")
-        else:
-            print(f"ℹ️ Nenhuma coluna 'Data' na aba '{sheet_title}'")
-
-# ⚙️ Exemplo de uso
-format_all_data_columns_as_date(
-    sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
-    json_keyfile='credentials.json'
-)
+# Exemplo de uso
+corrigir_formatos_de_data('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY', aba_nome='Página1')
