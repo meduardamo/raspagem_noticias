@@ -1211,46 +1211,61 @@ dados_noticias = raspar_noticias(data_hoje, sheet)
 # Salvar dados na planilha
 salvar_na_planilha(sheet, dados_noticias)
 
-import gspread
 from google.oauth2.service_account import Credentials
+import gspread
 from datetime import datetime
 
-def corrigir_formatos_de_data(sheet_id, aba_nome='Página1'):
-    # Escopos e credenciais
+def limpar_apostrofos_coluna_data(sheet_id, cred_path):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+    creds = Credentials.from_service_account_file(cred_path, scopes=scope)
     client = gspread.authorize(creds)
 
-    # Abrir planilha e aba
-    sheet = client.open_by_key(sheet_id)
-    aba = sheet.worksheet(aba_nome)
+    spreadsheet = client.open_by_key(sheet_id)
+    abas = spreadsheet.worksheets()
 
-    # Buscar todos os dados
-    dados = aba.get_all_values()
-
-    # Achar o índice da coluna "Data"
-    header = dados[0]
-    if "Data" not in header:
-        raise Exception("Coluna 'Data' não encontrada.")
-    idx_data = header.index("Data")
-
-    # Corrigir os dados
-    novas_linhas = [header]  # Manter o cabeçalho
-    for linha in dados[1:]:
-        if len(linha) <= idx_data:
-            novas_linhas.append(linha)
+    for aba in abas:
+        dados = aba.get_all_values()
+        if not dados:
             continue
-        data_str = linha[idx_data].strip().lstrip("'")  # Remove apóstrofo manualmente
-        try:
-            dt = datetime.strptime(data_str, "%d/%m/%Y")
-            linha[idx_data] = dt.strftime("%d/%m/%Y")  # Deixar como texto "limpo"
-        except:
-            pass  # Se não for uma data válida, mantém como está
-        novas_linhas.append(linha)
 
-    # Regravar tudo (pode sobrescrever, então cuidado)
-    aba.clear()
-    aba.update(novas_linhas)
+        header = dados[0]
+        if "Data" not in header:
+            print(f"ℹ️ Nenhuma coluna 'Data' na aba '{aba.title}'")
+            continue
 
-# Exemplo de uso
-corrigir_formatos_de_data('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY', aba_nome='Página1')
+        idx_data = header.index("Data")
+
+        novas_linhas = [header]
+        alterado = False
+
+        for linha in dados[1:]:
+            # Garante que a linha tem colunas suficientes
+            while len(linha) < len(header):
+                linha.append("")
+
+            valor = linha[idx_data].strip()
+
+            if valor.startswith("'"):
+                valor = valor.lstrip("'")
+                try:
+                    # Validar que é uma data no formato dd/mm/yyyy
+                    datetime.strptime(valor, "%d/%m/%Y")
+                    linha[idx_data] = valor
+                    alterado = True
+                except:
+                    pass
+
+            novas_linhas.append(linha)
+
+        if alterado:
+            aba.clear()
+            aba.update(novas_linhas)
+            print(f"✅ Coluna 'Data' corrigida na aba '{aba.title}'")
+        else:
+            print(f"✔️ Nada para corrigir na aba '{aba.title}'")
+
+# ⚙️ Exemplo de uso
+limpar_apostrofos_coluna_data(
+    sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
+    cred_path='credentials.json'
+)
