@@ -1270,3 +1270,13 @@ format_all_data_columns_as_date(
     sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
     json_keyfile='credentials.json'
 )
+
+if __name__ == "__main__":
+    # (demais raspagens que já estão no script)
+    
+    # Formatar automaticamente todas as colunas "Data"
+    format_all_data_columns_as_date(
+        sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
+        json_keyfile='credentials.json'
+    )
+
