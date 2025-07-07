@@ -1216,8 +1216,11 @@ from googleapiclient.discovery import build
 import gspread
 
 def format_all_data_columns_as_date(sheet_id, json_keyfile):
-    # Autenticação
-    credentials = Credentials.from_service_account_file(json_keyfile)
+    scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
+    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scopes)
     gc = gspread.authorize(credentials)
     service = build('sheets', 'v4', credentials=credentials)
 
