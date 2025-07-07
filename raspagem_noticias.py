@@ -1210,3 +1210,63 @@ dados_noticias = raspar_noticias(data_hoje, sheet)
 
 # Salvar dados na planilha
 salvar_na_planilha(sheet, dados_noticias)
+
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+import gspread
+
+def format_all_data_columns_as_date(sheet_id, json_keyfile):
+    # Autenticar
+    credentials = Credentials.from_service_account_file(json_keyfile)
+    gc = gspread.authorize(credentials)
+    service = build('sheets', 'v4', credentials=credentials)
+
+    spreadsheet = gc.open_by_key(sheet_id)
+    spreadsheet_info = spreadsheet.fetch_sheet_metadata()
+    sheets = spreadsheet_info['sheets']
+
+    for sheet_info in sheets:
+        sheet_title = sheet_info['properties']['title']
+        sheet_id_internal = sheet_info['properties']['sheetId']
+
+        worksheet = spreadsheet.worksheet(sheet_title)
+        try:
+            headers = worksheet.row_values(1)
+        except:
+            continue  # Pula aba vazia ou inacessível
+
+        requests = []
+
+        for idx, col_name in enumerate(headers):
+            if col_name.strip().lower() == "data":
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id_internal,
+                            "startColumnIndex": idx,
+                            "endColumnIndex": idx + 1
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "numberFormat": {
+                                    "type": "DATE",
+                                    "pattern": "dd/mm/yyyy"
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat.numberFormat"
+                    }
+                })
+
+        if requests:
+            body = {"requests": requests}
+            service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
+            print(f"✅ Coluna(s) 'Data' formatada(s) na aba '{sheet_title}'")
+        else:
+            print(f"ℹ️ Nenhuma coluna 'Data' encontrada na aba '{sheet_title}'")
+
+# Exemplo de uso
+format_all_data_columns_as_date(
+    sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
+    json_keyfile='credentials.json'
+)
