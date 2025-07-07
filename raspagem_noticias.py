@@ -386,6 +386,8 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import urllib3
 import certifi
+import time
+from requests.exceptions import ChunkedEncodingError
 
 # Suprimir avisos de solicitação insegura (útil para sites sem HTTPS completo, não é o caso aqui)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -415,12 +417,27 @@ def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
     urls_sheet.append_row([url])
 
-def scrape_ans_news(url, sheet):
-    try:
-        response = requests.get(url, verify=certifi.where(), timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"Erro ao acessar a URL {url}: {e}")
+import time
+from requests.exceptions import ChunkedEncodingError
+import certifi
+
+def scrape_ans_news(url, sheet, max_retries=3):
+    def safe_request(url):
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, verify=certifi.where(), timeout=15)
+                response.raise_for_status()
+                return response
+            except ChunkedEncodingError as e:
+                print(f"⚠️ Tentativa {attempt+1}: erro de leitura incompleta (ChunkedEncodingError) - {e}")
+            except requests.exceptions.RequestException as e:
+                print(f"⚠️ Tentativa {attempt+1}: erro ao acessar {url} - {e}")
+            time.sleep(2)
+        return None
+
+    response = safe_request(url)
+    if response is None:
+        print("❌ Falha ao obter resposta da ANS após múltiplas tentativas.")
         return []
 
     soup = BeautifulSoup(response.content, 'html.parser')
@@ -430,25 +447,20 @@ def scrape_ans_news(url, sheet):
     already_scraped = get_already_scraped_urls(sheet)
 
     for block in news_blocks:
-        # Subtítulo
         subtitulo_tag = block.find('div', class_='subtitulo-noticia')
         subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
 
-        # Título e link
         titulo_tag = block.find('a', href=True)
         titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
         link = titulo_tag['href'] if titulo_tag else 'N/A'
 
-        # Pular se já foi raspado
         if link in already_scraped:
             continue
         add_scraped_url(sheet, link)
 
-        # Data
         data_tag = block.find('span', class_='data')
         data = data_tag.get_text(strip=True) if data_tag else 'N/A'
 
-        # Descrição
         descricao_tag = block.find('span', class_='descricao')
         descricao = 'N/A'
         if descricao_tag:
