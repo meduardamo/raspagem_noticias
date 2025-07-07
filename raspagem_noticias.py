@@ -1216,38 +1216,32 @@ from googleapiclient.discovery import build
 import gspread
 
 def format_all_data_columns_as_date(sheet_id, json_keyfile):
-    scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive'
-    ]
-    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scopes)
+    credentials = Credentials.from_service_account_file(json_keyfile)
     gc = gspread.authorize(credentials)
     service = build('sheets', 'v4', credentials=credentials)
 
-    # Abrir a planilha
     spreadsheet = gc.open_by_key(sheet_id)
-    spreadsheet_info = spreadsheet.fetch_sheet_metadata()
+    spreadsheet_info = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
     sheets = spreadsheet_info['sheets']
 
     for sheet_info in sheets:
         sheet_title = sheet_info['properties']['title']
         sheet_id_internal = sheet_info['properties']['sheetId']
 
+        worksheet = spreadsheet.worksheet(sheet_title)
         try:
-            worksheet = spreadsheet.worksheet(sheet_title)
             headers = worksheet.row_values(1)
         except:
-            continue  # Pula aba vazia ou inacessível
+            continue  # pular abas vazias
 
         requests = []
-
         for idx, col_name in enumerate(headers):
             if col_name.strip().lower() == "data":
                 requests.append({
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet_id_internal,
-                            "startRowIndex": 1,  # Ignora o cabeçalho
+                            "startRowIndex": 1,  # ignora cabeçalho
                             "startColumnIndex": idx,
                             "endColumnIndex": idx + 1
                         },
@@ -1268,16 +1262,10 @@ def format_all_data_columns_as_date(sheet_id, json_keyfile):
             service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
             print(f"✅ Coluna(s) 'Data' formatada(s) na aba '{sheet_title}'")
         else:
-            print(f"ℹ️ Nenhuma coluna 'Data' encontrada na aba '{sheet_title}'")
+            print(f"ℹ️ Nenhuma coluna 'Data' na aba '{sheet_title}'")
 
-# Chamada de exemplo (fora do if para rodar direto se quiser)
-# format_all_data_columns_as_date(
-#     sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
-#     json_keyfile='credentials.json'
-# )
-
-if __name__ == "__main__":
-    format_all_data_columns_as_date(
-        sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
-        json_keyfile='credentials.json'
-    )
+# ⚙️ Exemplo de uso:
+format_all_data_columns_as_date(
+    sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
+    json_keyfile='credentials.json'
+)
