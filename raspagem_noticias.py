@@ -1216,7 +1216,8 @@ from googleapiclient.discovery import build
 import gspread
 
 def format_all_data_columns_as_date(sheet_id, json_keyfile):
-    credentials = Credentials.from_service_account_file(json_keyfile)
+    scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
     gc = gspread.authorize(credentials)
     service = build('sheets', 'v4', credentials=credentials)
 
@@ -1241,7 +1242,7 @@ def format_all_data_columns_as_date(sheet_id, json_keyfile):
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet_id_internal,
-                            "startRowIndex": 1,  # ignora cabeçalho
+                            "startRowIndex": 1,
                             "startColumnIndex": idx,
                             "endColumnIndex": idx + 1
                         },
@@ -1264,7 +1265,7 @@ def format_all_data_columns_as_date(sheet_id, json_keyfile):
         else:
             print(f"ℹ️ Nenhuma coluna 'Data' na aba '{sheet_title}'")
 
-# ⚙️ Exemplo de uso:
+# ⚙️ Exemplo de uso
 format_all_data_columns_as_date(
     sheet_id='1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY',
     json_keyfile='credentials.json'
