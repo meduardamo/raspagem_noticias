@@ -526,15 +526,15 @@ MESES = {
     'dez': '12'
 }
 
-# Inicializa planilha
+# Inicializa a conexão com a planilha do Google Sheets
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+    creds = Credentials.from_service_account_file('/content/credentials.json', scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
 
-# Recupera URLs já raspadas
+# Função para verificar URLs já raspadas
 def get_already_scraped_urls(sheet):
     try:
         urls_sheet = sheet.worksheet("URLs")
@@ -542,90 +542,110 @@ def get_already_scraped_urls(sheet):
         urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
         urls_sheet.append_row(["URLs"])
     urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Ignora cabeçalho
+    return set(urls[1:])  # Exclui o cabeçalho
 
-# Salva nova URL raspada
+# Função para adicionar uma URL já raspada
 def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
     urls_sheet.append_row([url])
 
-# Raspagem das notícias do CFM
-def scrape_cfm(sheet):
-    url = "https://portal.cfm.org.br/noticias/?s="
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers, verify=False)
-    soup = BeautifulSoup(response.content, 'html.parser')
+# Função para raspar notícias do CFM
+def scrape_cfm_news(url, sheet):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
 
-    cards = soup.select('.card.card--medium.result-item')
-    already_scraped = get_already_scraped_urls(sheet)
-    hoje = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d/%m/%Y')
+    data_list = []  # Lista para armazenar os dados antes de enviar para o Google Sheets
 
-    registros = []
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()  # Levanta uma exceção para respostas 4xx/5xx
 
-    for card in cards:
-        try:
-            link_tag = card.find('a', href=True)
-            if not link_tag:
-                continue
-            link = link_tag['href']
-            if link in already_scraped:
-                continue
+        soup = BeautifulSoup(response.content, 'html.parser')
 
-            titulo_tag = card.find('h3')
-            titulo = titulo_tag.text.strip() if titulo_tag else 'N/A'
+        # Verificar URLs já raspadas
+        already_scraped_urls = get_already_scraped_urls(sheet)
 
-            descricao_tag = card.find('div', class_='description')
-            descricao = descricao_tag.text.strip() if descricao_tag else 'N/A'
+        # Raspar o título corretamente da tag <h3>
+        title_tag = soup.find('h3')
+        title = title_tag.text.strip() if title_tag else 'N/A'
 
-            # Data
-            date_div = card.find('div', class_='noticia-date')
-            if not date_div:
-                continue
+        # Raspar o link corretamente da tag <a> com a classe "c-default"
+        link_tag = soup.find('a', class_='c-default', href=True)
+        link = link_tag['href'] if link_tag else 'N/A'
 
-            dia = date_div.find('h3').text.strip()
-            resto = date_div.find_all('div')[-1].get_text(separator=" ").strip().lower().split()
-            if len(resto) >= 2:
-                mes_abv, ano = resto[0], resto[1]
-                mes = MESES.get(mes_abv[:3], '??')
-                data_formatada = f"{dia.zfill(2)}/{mes}/{ano}"
+        # Verificar se a URL já foi raspada
+        if link not in already_scraped_urls:
+            # Capturar a data: dia na tag <h3> e mês/ano na tag <div> logo abaixo
+            date_div = soup.find('div', class_='noticia-date')
+            day_tag = date_div.find('h3') if date_div else None
+            month_year_div = date_div.find('div') if date_div else None
+
+            # Capturar o dia
+            day = day_tag.text.strip() if day_tag else 'N/A'
+
+            # Capturar o mês e o ano (remover quebras de linha e <br>)
+            if month_year_div:
+                month_year_parts = month_year_div.get_text(separator=" ").split()
+                if len(month_year_parts) >= 2:
+                    month = month_year_parts[0]
+                    year = month_year_parts[1]
+                else:
+                    month, year = 'N/A', 'N/A'
             else:
-                data_formatada = '??/??/????'
+                month, year = 'N/A', 'N/A'
 
-            # Só pega se for hoje
-            if data_formatada != hoje:
-                continue
+            # Combinar dia, mês e ano em uma única string
+            date_text = f"{day} {month} {year}".strip()
 
-            registros.append({
-                'Data': data_formatada,
-                'Título': titulo,
-                'Descrição': descricao,
+            # Raspar a descrição corretamente (conteúdo da tag <p>)
+            description_tag = soup.find('p')
+            description = description_tag.text.strip() if description_tag else 'N/A'
+
+            # Adicionar os dados à lista, na ordem correta: Data, Título, Descrição, Link
+            data_list.append({
+                'Data': date_text,
+                'Título': title,
+                'Descrição': description,
                 'Link': link
             })
 
+            # Acessa a aba "cfm" da planilha
+            worksheet = sheet.worksheet("cfm")
+
+            # Verificar se é necessário adicionar os cabeçalhos
+            if worksheet.row_count == 1 and worksheet.cell(1, 1).value is None:
+                # Adicionar cabeçalhos
+                worksheet.append_row(["Data", "Título", "Descrição", "Link"])
+
+            # Converter a lista de dicionários em DataFrame
+            df = pd.DataFrame(data_list)
+
+            # Se houver dados, adicioná-los à planilha
+            if not df.empty:
+                worksheet.append_rows(df.values.tolist())
+
+            # Adicionar a URL à lista de URLs raspadas
             add_scraped_url(sheet, link)
 
-        except Exception as e:
-            print("Erro ao processar uma notícia:", e)
-            continue
+            print('Dados inseridos com sucesso na aba "cfm".')
 
-    # Atualiza planilha
-    if registros:
-        aba = sheet.worksheet("cfm")
-        df = pd.DataFrame(registros)
+        else:
+            print(f"URL já raspada: {link}")
 
-        # Se necessário, adiciona cabeçalhos
-        if aba.row_count == 1 and aba.cell(1, 1).value is None:
-            aba.append_row(["Data", "Título", "Descrição", "Link"])
+    except requests.exceptions.HTTPError as errh:
+        print("Erro HTTP:", errh)
+    except requests.exceptions.ConnectionError as errc:
+        print("Erro de Conexão:", errc)
+    except requests.exceptions.Timeout as errt:
+        print("Erro de Timeout:", errt)
+    except requests.exceptions.RequestException as err:
+        print("Outro erro ocorreu:", err)
 
-        aba.append_rows(df.values.tolist())
-        print(f"✅ {len(registros)} notícia(s) adicionada(s) à aba 'cfm'.")
-    else:
-        print("ℹ️ Nenhuma nova notícia para hoje.")
-
-# Execução principal
-if __name__ == "__main__":
-    planilha = initialize_sheet()
-    scrape_cfm(planilha)
+# Exemplo de uso
+sheet = initialize_sheet()
+url = "https://portal.cfm.org.br/noticias/?s="
+scrape_cfm_news(url, sheet)
 
 """# FIOCRUZ"""
 
