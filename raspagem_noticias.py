@@ -529,7 +529,7 @@ MESES = {
 # Inicializa a conexão com a planilha do Google Sheets
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_file('/content/credentials.json', scopes=scope)
+    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
     return sheet
