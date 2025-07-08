@@ -29,7 +29,7 @@ def get_already_scraped_urls(sheet):
         urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
         urls_sheet.append_row(["URLs"])
     urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
+    return set(urls[1:])  # Exclui o cabeçalho
 
 def add_scraped_url(sheet, url):
     urls_sheet = sheet.worksheet("URLs")
@@ -48,7 +48,7 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
 
     try:
         response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Levantará uma exceção para respostas 4xx/5xx
+        response.raise_for_status()
 
         html_content = response.text
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -61,48 +61,62 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
             if data_element:
                 data_text_raw = data_element.text.strip()
                 try:
-                    data_text = datetime.strptime(data_text_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
+                    data_dt = datetime.strptime(data_text_raw, "%d/%m/%Y")  # Formato real
+                    data_text = data_dt.strftime("%d/%m/%Y")
                 except ValueError:
-                    print(f"Data encontrada inválida ou em formato desconhecido: {data_text_raw}")
-                    continue  # Skip to next news item if the date is invalid
+                    print(f"Data encontrada inválida: {data_text_raw}")
+                    continue
+
                 if data_text == data_desejada:
                     titulo_element = noticia.find('h2', class_='titulo')
-                    url = titulo_element.find('a')['href']
-                    if url not in already_scraped_urls:
-                        subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
-                        subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
-                        titulo = titulo_element.text.strip()
-                        descricao = noticia.find('span', class_='descricao')
-                        descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
+                    if not titulo_element:
+                        continue
 
-                        dados = [
-                            data_text,           # Data
-                            nome_ministerio,     # Nome do Ministério
-                            subtitulo,           # Subtítulo
-                            titulo,              # Título
-                            descricao_text,      # Descrição
-                            url                  # URL
-                        ]
+                    link_element = titulo_element.find('a')
+                    if not link_element or 'href' not in link_element.attrs:
+                        continue
 
-                        sheet.sheet1.append_row(dados)
-                        add_scraped_url(sheet, url)
+                    noticia_url = link_element['href']
+                    if noticia_url in already_scraped_urls:
+                        continue
+
+                    subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
+                    subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
+                    titulo = titulo_element.text.strip()
+                    descricao = noticia.find('span', class_='descricao')
+                    descricao_text = (
+                        descricao.text.split('-')[1].strip()
+                        if descricao and '-' in descricao.text
+                        else (descricao.text.strip() if descricao else "Descrição não disponível")
+                    )
+
+                    dados = [
+                        data_dt,             # Agora é datetime real
+                        nome_ministerio,
+                        subtitulo,
+                        titulo,
+                        descricao_text,
+                        noticia_url
+                    ]
+
+                    sheet.sheet1.append_row(dados)
+                    add_scraped_url(sheet, noticia_url)
+                    print(f"Notícia adicionada: {titulo}")
 
         print('Dados inseridos com sucesso na planilha.')
 
     except requests.exceptions.HTTPError as errh:
-        print ("Http Error:", errh)
+        print("Http Error:", errh)
     except requests.exceptions.ConnectionError as errc:
-        print ("Error Connecting:", errc)
+        print("Error Connecting:", errc)
     except requests.exceptions.Timeout as errt:
-        print ("Timeout Error:", errt)
+        print("Timeout Error:", errt)
     except requests.exceptions.RequestException as err:
-        print ("Oops: Something Else", err)
+        print("Oops: Something Else", err)
 
 # Exemplo de uso
 sheet = initialize_sheet()
 url = "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte"
-
-# Para raspar notícias da data atual
 raspar_noticias_por_data(url, sheet)
 
 """# Ministério da Educação"""
