@@ -336,7 +336,7 @@ if __name__ == "__main__":
     processar_povos_indigenas(sheet, "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1")
     processar_igualdade(sheet, "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias")
 
-"""Raspagem - Consed"""
+# Consed
 
 import requests
 from bs4 import BeautifulSoup
@@ -634,7 +634,7 @@ if __name__ == "__main__":
     sheet = initialize_sheet(SHEET_ID)
     raspar_noticias_ans(sheet)
 
-# ANVISA – Raspagem de notícias do dia atual
+# ANVISA
 
 import requests
 import gspread
@@ -676,7 +676,7 @@ def raspar_anvisa_do_dia(sheet):
     data_hoje_str = data_hoje.strftime("%d/%m/%Y")
     url = 'https://www.gov.br/an
 
-# FIOCRUZ – Raspagem de notícias do dia atual
+# FIOCRUZ
 
 import requests
 import gspread
