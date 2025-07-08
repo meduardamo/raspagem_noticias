@@ -1,6 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import pytz
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import urllib3
 from utils import (
     initialize_sheet,
     get_already_scraped_urls,
@@ -10,13 +14,7 @@ from utils import (
     hoje_brasil_dt,
 )
 
-from datetime import datetime
-import pytz
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import urllib3
+HEADERS = {'User-Agent': 'Mozilla/5.0'}
 
 # Suprimir avisos SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
