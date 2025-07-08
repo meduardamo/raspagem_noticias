@@ -545,3 +545,60 @@ def raspar_anvisa_do_dia(sheet):
 if __name__ == "__main__":
     sheet = initialize_sheet()
     raspar_anvisa_do_dia(sheet)
+
+import requests
+import gspread
+import pytz
+import urllib3
+from bs4 import BeautifulSoup
+from datetime import datetime
+from oauth2client.service_account import ServiceAccountCredentials
+from utils import (
+    initialize_sheet,
+    get_or_create_worksheet,
+    get_already_scraped_urls,
+    add_scraped_url,
+    hoje_brasil_dt  # retorna datetime com hora zerada
+)
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+HEADERS = {'User-Agent': 'Mozilla/5.0'}
+
+def processar_fiocruz(sheet, url="https://fiocruz.br/noticias"):
+    gov_sheet = get_or_create_worksheet(sheet, "fiocruz", headers=["Data", "Título", "Descrição", "URL"])
+    urls_ja = get_already_scraped_urls(sheet)
+    tz = pytz.timezone("America/Sao_Paulo")
+    hoje = datetime.now(tz).date()
+    hoje_str = hoje.strftime("%d/%m/%Y")
+
+    resp = requests.get(url, headers=HEADERS, verify=False, timeout=10)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    blocos = soup.select("div.views-row")
+    novas = []
+
+    for b in blocos:
+        time_tag = b.find("div", class_="data-busca")
+        text_data = time_tag.find("time").text.strip() if time_tag else ""
+        if text_data != hoje_str:
+            continue
+
+        a = b.select_one("div.titulo-busca a")
+        if not a: continue
+        link = a["href"]
+        link = link if link.startswith("http") else "https://www.fiocruz.br" + link
+        if link in urls_ja:
+            continue
+
+        titulo = a.text.strip()
+        desc_tag = b.find("div", class_="chamada-busca")
+        descricao = desc_tag.text.strip() if desc_tag else ""
+        data_dt = datetime.combine(hoje, datetime.min.time())
+
+        novas.append([data_dt, titulo, descricao, link])
+        add_scraped_url(sheet, link)
+
+    if novas:
+        gov_sheet.append_rows(novas, value_input_option="USER_ENTERED")
+        print(f"✅ {len(novas)} notícia(s) da Fiocruz adicionadas.")
+    else:
+        print("ℹ️ Nenhuma notícia nova da Fiocruz hoje.")
