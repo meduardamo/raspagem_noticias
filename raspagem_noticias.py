@@ -30,14 +30,6 @@ import pytz
 
 # CFM
 
-import requests
-from bs4 import BeautifulSoup
-import gspread
-import pytz
-from datetime import datetime
-from google.oauth2.service_account import Credentials
-import urllib3
-
 # Suprimir avisos de requisição insegura
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
