@@ -38,6 +38,8 @@ def add_scraped_url(sheet, url):
 def hoje_brasil_str():
     return datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%d/%m/%Y")
 
-# Data de hoje como datetime (para usar direto no Sheets como tipo DATA)
+# Data de hoje como datetime.datetime sem tzinfo e com hora zerada
 def hoje_brasil_dt():
-    return datetime.now(pytz.timezone('America/Sao_Paulo'))
+    tz = pytz.timezone('America/Sao_Paulo')
+    hoje = datetime.now(tz).date()  # tipo date
+    return datetime.combine(hoje, datetime.min.time())  # datetime sem fuso
