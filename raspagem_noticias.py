@@ -876,3 +876,123 @@ def raspar_fiocruz(sheet):
 if __name__ == "__main__":
     sheet = initialize_sheet()
     raspar_fiocruz(sheet)
+
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from google.oauth2.service_account import Credentials
+from datetime import datetime
+import pytz
+import urllib3
+
+# Suprimir avisos de requisição insegura
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Mapeamento dos meses em português (siglas)
+MESES = {
+    'jan': '01',
+    'fev': '02',
+    'mar': '03',
+    'abr': '04',
+    'mai': '05',
+    'jun': '06',
+    'jul': '07',
+    'ago': '08',
+    'set': '09',
+    'out': '10',
+    'nov': '11',
+    'dez': '12'
+}
+
+def initialize_sheet():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+    client = gspread.authorize(creds)
+    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    return set(urls_sheet.col_values(1)[1:])
+
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+def scrape_cfm_news(url, sheet):
+    headers = {
+        'User-Agent': 'Mozilla/5.0'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, verify=False, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Já lidas
+        already_scraped_urls = get_already_scraped_urls(sheet)
+
+        # Dados
+        title_tag = soup.find('h3')
+        title = title_tag.text.strip() if title_tag else 'N/A'
+
+        link_tag = soup.find('a', class_='c-default', href=True)
+        link = link_tag['href'] if link_tag else 'N/A'
+
+        if link in already_scraped_urls:
+            print(f"URL já raspada: {link}")
+            return
+
+        # Data
+        date_div = soup.find('div', class_='noticia-date')
+        day_tag = date_div.find('h3') if date_div else None
+        month_year_div = date_div.find('div') if date_div else None
+
+        day = day_tag.text.strip() if day_tag else ''
+        month, year = '', ''
+        if month_year_div:
+            parts = month_year_div.get_text(separator=" ").split()
+            if len(parts) >= 2:
+                month = MESES.get(parts[0].lower()[:3], '01')  # usa sigla com fallback
+                year = parts[1]
+
+        # Montar datetime real
+        try:
+            data_dt = datetime.strptime(f"{day}/{month}/{year}", "%d/%m/%Y")
+        except Exception as e:
+            print(f"Erro ao converter data: {e}")
+            return
+
+        # Filtrar apenas notícias do dia atual (Brasil)
+        hoje_br = datetime.now(pytz.timezone('America/Sao_Paulo')).date()
+        if data_dt.date() != hoje_br:
+            print(f"ℹ️ Notícia não é de hoje ({data_dt.strftime('%d/%m/%Y')})")
+            return
+
+        # Descrição
+        description_tag = soup.find('p')
+        description = description_tag.text.strip() if description_tag else 'N/A'
+
+        # Planilha
+        try:
+            worksheet = sheet.worksheet("cfm")
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = sheet.add_worksheet(title="cfm", rows="100", cols="4")
+            worksheet.append_row(["Data", "Título", "Descrição", "Link"])
+
+        # Inserir com tipo DATA real
+        worksheet.append_row([data_dt, title, description, link], value_input_option='USER_ENTERED')
+
+        add_scraped_url(sheet, link)
+        print(f"✅ Notícia adicionada: {title}")
+
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+
+# Executar
+if __name__ == "__main__":
+    sheet = initialize_sheet()
+    scrape_cfm_news("https://portal.cfm.org.br/noticias/?s=", sheet)
