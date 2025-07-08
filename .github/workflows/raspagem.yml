@@ -3,39 +3,40 @@ name: Raspagem e Notificação Automática
 on:
   schedule:
     - cron: '0 * * * *'  # Executa a cada hora no minuto 0
-  workflow_dispatch:  # Permite a execução manual do workflow através da interface do GitHub
+  workflow_dispatch:  # Permite execução manual pelo GitHub
 
 jobs:
   run-script:
-    runs-on: ubuntu-latest  # Define o sistema operacional do runner
+    runs-on: ubuntu-latest  # Ambiente padrão
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3  # Ação para verificar o código do seu repositório
+      - name: Checkout do código
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4  # Ação para configurar o ambiente Python
-      with:
-        python-version: '3.10'  # Especifique a versão do Python
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Upgrade pip
-      run: python -m pip install --upgrade pip
+      - name: Atualizar pip
+        run: python -m pip install --upgrade pip
 
-    - name: Install dependencies
-      run: python -m pip install -r requirements.txt  # Instala as dependências do arquivo requirements.txt
+      - name: Instalar dependências
+        run: python -m pip install -r requirements.txt
 
-    - name: Create credentials file
-      run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > credentials.json
-      shell: bash  # Cria um arquivo de credenciais para autenticação com o Google
+      - name: Criar arquivo de credenciais
+        run: echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > credentials.json
+        shell: bash
 
-    - name: Check time and execute script
-      run: |
-        CURRENT_HOUR=$(TZ='America/Sao_Paulo' date +'%H')
-        if [ $CURRENT_HOUR -ge 8 ] && [ $CURRENT_HOUR -lt 18 ]; then
-          python raspagem_noticias.py
-        else
-          echo "Fora do horário de execução permitido (8h-18h BRT)."
-        fi
-      shell: bash
-      env:  # Configura as variáveis de ambiente necessárias para o script
-        GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
+      - name: Executar script dentro do horário (8h às 18h BRT)
+        run: |
+          CURRENT_HOUR=$(TZ='America/Sao_Paulo' date +'%H')
+          if [ "$CURRENT_HOUR" -ge 8 ] && [ "$CURRENT_HOUR" -lt 18 ]; then
+            echo "⏱️ Executando raspagem às $CURRENT_HOUR horas..."
+            python raspagem_noticias.py
+          else
+            echo "⏳ Fora do horário de execução (atual: $CURRENT_HOUR BRT)"
+          fi
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials.json
