@@ -336,6 +336,112 @@ if __name__ == "__main__":
     processar_povos_indigenas(sheet, "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1")
     processar_igualdade(sheet, "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias")
 
+import requests
+from bs4 import BeautifulSoup
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
+import urllib3
+from datetime import datetime
+import pytz
+
+# Suprimir avisos de requisição insegura
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Mapeamento dos meses em inglês
+MESES_EN = {
+    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+}
+
+def initialize_sheet():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+    client = gspread.authorize(creds)
+    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
+
+def get_already_scraped_urls(sheet):
+    try:
+        urls_sheet = sheet.worksheet("URLs")
+    except gspread.exceptions.WorksheetNotFound:
+        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
+        urls_sheet.append_row(["URLs"])
+    return set(urls_sheet.col_values(1)[1:])
+
+def add_scraped_url(sheet, url):
+    urls_sheet = sheet.worksheet("URLs")
+    urls_sheet.append_row([url])
+
+def scrape_cfm_news(url, sheet):
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    data_list = []
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        already_scraped_urls = get_already_scraped_urls(sheet)
+
+        # Captura do título
+        title_tag = soup.find('h3')
+        title = title_tag.text.strip() if title_tag else 'N/A'
+
+        # Captura do link
+        link_tag = soup.find('a', class_='c-default', href=True)
+        link = link_tag['href'] if link_tag else 'N/A'
+
+        if link in already_scraped_urls:
+            print(f"🔁 URL já raspada: {link}")
+            return
+
+        # Captura da data no formato: <h3>dia</h3> e <div>mês<br>ano</div>
+        date_div = soup.find('div', class_='noticia-date')
+        day_tag = date_div.find('h3') if date_div else None
+        month_year_div = date_div.find('div') if date_div else None
+
+        day = day_tag.text.strip().zfill(2) if day_tag else '01'
+
+        if month_year_div:
+            parts = list(month_year_div.stripped_strings)
+            if len(parts) >= 2:
+                month_abbr = parts[0][:3].capitalize()
+                month = MESES_EN.get(month_abbr, '01')
+                year = parts[1].strip()
+            else:
+                month, year = '01', '2025'
+        else:
+            month, year = '01', '2025'
+
+        data_formatada = f"{day}/{month}/{year}"
+
+        # Verificação com a data de hoje
+        tz = pytz.timezone("America/Sao_Paulo")
+        hoje = datetime.now(tz).strftime("%d/%m/%Y")
+        if data_formatada != hoje:
+            print(f"📌 Notícia ignorada – data diferente de hoje: {data_formatada}")
+            return
+
+        # Captura da descrição
+        description_tag = soup.find('p')
+        description = description_tag.text.strip() if description_tag else 'N/A'
+
+        data_list.append([data_formatada, title, description, link])
+
+        worksheet = sheet.worksheet("cfm")
+        worksheet.append_rows(data_list)
+        add_scraped_url(sheet, link)
+
+        print(f"✅ Notícia do dia inserida: {data_formatada} | {title}")
+
+    except requests.exceptions.RequestException as err:
+        print(f"❌ Erro na requisição: {err}")
+
+# Executar
+sheet = initialize_sheet()
+url = "https://portal.cfm.org.br/noticias/?s="
+scrape_cfm_news(url, sheet)
+
 # Consed
 
 import requests
