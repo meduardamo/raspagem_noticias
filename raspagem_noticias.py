@@ -531,7 +531,7 @@ def raspar_noticias_consed(sheet, data_desejada=None, max_pages=5):
         sheet.append_rows(novas_linhas, value_input_option='USER_ENTERED')
         print(f"✅ {len(novas_linhas)} notícia(s) adicionada(s) da Consed.")
     else:
-        print("ℹ️ Nenhuma nova notícia encontrada para a data informada.")
+        print("ℹ️ Nenhuma nova notícia do Consed para hoje.")
 
 # --- Execução ---
 if __name__ == "__main__":
