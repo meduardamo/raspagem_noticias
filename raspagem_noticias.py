@@ -1,23 +1,29 @@
-# main.py
-
 from utils import initialize_sheet
 from ministerios import (
-    processar_esporte,
-    processar_mec,
-    processar_saude,
-    processar_povos_indigenas,
-    processar_igualdade,
+    processar_esporte, processar_mec, processar_saude,
+    processar_povos_indigenas, processar_igualdade,
+)
+from instituicoes import (
+    processar_fiocruz, raspar_noticias_ans, raspar_noticias_undime,
+    raspar_noticias_consed, raspar_anvisa_do_dia, scrape_cfm_news
 )
 
 if __name__ == "__main__":
     sheet = initialize_sheet()
 
-    # Você pode adicionar/remover ministérios conforme desejar
     processar_esporte(sheet, "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte")
     processar_mec(sheet, "https://www.gov.br/mec/pt-br/assuntos/noticias")
     processar_saude(sheet, "https://www.gov.br/saude/pt-br/assuntos/noticias")
     processar_povos_indigenas(sheet, "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1")
     processar_igualdade(sheet, "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias")
+
+    # Instituições
+    processar_fiocruz(sheet)
+    raspar_noticias_ans(sheet)
+    raspar_noticias_consed(sheet)
+    raspar_noticias_undime(sheet)
+    raspar_anvisa_do_dia(sheet)
+    scrape_cfm_news("https://portal.cfm.org.br/noticias/?s=", sheet)
 
 import requests
 from bs4 import BeautifulSoup
