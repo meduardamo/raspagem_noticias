@@ -2,9 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import urllib3
 from utils import (
     initialize_sheet,
     get_already_scraped_urls,
@@ -16,46 +13,16 @@ from utils import (
 
 HEADERS = {'User-Agent': 'Mozilla/5.0'}
 
-# Suprimir avisos SSL
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+def _data_com_datetime(data_dt):
+    return datetime.combine(data_dt.date(), datetime.min.time())
 
-# === Inicializa Planilha ===
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-
-# === Abas e URLs ===
-def get_or_create_worksheet(sheet, name, headers=None):
-    try:
-        return sheet.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sheet.add_worksheet(title=name, rows="100", cols="20")
-        if headers:
-            ws.append_row(headers)
-        return ws
-
-def get_already_scraped_urls(sheet):
-    urls_sheet = get_or_create_worksheet(sheet, "URLs", headers=["URLs"])
-    return set(urls_sheet.col_values(1)[1:])
-
-def add_scraped_url(sheet, url):
-    urls_sheet = get_or_create_worksheet(sheet, "URLs", headers=["URLs"])
-    urls_sheet.append_row([url])
-
-# === Processa Ministério do Esporte ===
 def processar_esporte(sheet, url, data_desejada=None):
-    tz = pytz.timezone("America/Sao_Paulo")
-    data_hoje = datetime.now(tz).date()
-    if not data_desejada:
-        data_desejada = data_hoje.strftime("%d/%m/%Y")
-
+    data_desejada = data_desejada or hoje_brasil_str()
     gov_sheet = get_or_create_worksheet(sheet, "gov", headers=["Data", "Ministério", "Subtítulo", "Título", "Descrição", "URL"])
     urls_ja_lidas = get_already_scraped_urls(sheet)
 
     try:
-        html = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, verify=False).text
+        html = requests.get(url, headers=HEADERS, verify=False).text
         soup = BeautifulSoup(html, 'html.parser')
         nome_ministerio = soup.find('meta', property="og:site_name")
         nome_ministerio = nome_ministerio['content'] if nome_ministerio else "Ministério do Esporte"
@@ -67,7 +34,7 @@ def processar_esporte(sheet, url, data_desejada=None):
             if not data_tag:
                 continue
             try:
-                data_dt = datetime.strptime(data_tag.text.strip(), "%d/%m/%Y").date()
+                data_dt = datetime.strptime(data_tag.text.strip(), "%d/%m/%Y")
             except ValueError:
                 continue
             if data_dt.strftime("%d/%m/%Y") != data_desejada:
@@ -92,9 +59,7 @@ def processar_esporte(sheet, url, data_desejada=None):
                 else (descricao_tag.text.strip() if descricao_tag else "Descrição não disponível")
             )
 
-            # Transformar para datetime.datetime (com hora zero)
-            data_completa = datetime.combine(data_dt, datetime.min.time())
-
+            data_completa = _data_com_datetime(data_dt)
             linha = [data_completa, nome_ministerio, subtitulo, titulo_tag.text.strip(), descricao, url_noticia]
             novas_linhas.append(linha)
             add_scraped_url(sheet, url_noticia)
@@ -107,11 +72,6 @@ def processar_esporte(sheet, url, data_desejada=None):
 
     except Exception as e:
         print(f"❌ Erro Esporte: {e}")
-
-# === Execução ===
-if __name__ == "__main__":
-    sheet = initialize_sheet()
-    processar_esporte(sheet, "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte")
 
 def processar_mec(sheet, url, data_desejada=None):
     data_desejada = data_desejada or hoje_brasil_str()
@@ -156,7 +116,8 @@ def processar_mec(sheet, url, data_desejada=None):
                 else (descricao_tag.text.strip() if descricao_tag else "Descrição não disponível")
             )
 
-            linha = [data_dt, nome_ministerio, subtitulo, titulo_tag.text.strip(), descricao, url_noticia]
+            data_completa = _data_com_datetime(data_dt)
+            linha = [data_completa, nome_ministerio, subtitulo, titulo_tag.text.strip(), descricao, url_noticia]
             novas_linhas.append(linha)
             add_scraped_url(sheet, url_noticia)
 
@@ -208,7 +169,8 @@ def processar_saude(sheet, url, data_desejada=None):
             descricao_tag = noticia.find('span', class_='description')
             descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
 
-            linha = [data_dt, nome_ministerio, subtitulo, titulo, descricao, url_noticia]
+            data_completa = datetime.combine(data_dt.date(), datetime.min.time())
+            linha = [data_completa, nome_ministerio, subtitulo, titulo, descricao, url_noticia]
             novas_linhas.append(linha)
             add_scraped_url(sheet, url_noticia)
 
@@ -263,7 +225,10 @@ def processar_povos_indigenas(sheet, url, data_desejada=None):
             descricao_tag = noticia.find('p', class_='description discreet')
             descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
 
-            linha = [data_dt, nome_ministerio, "Não disponível", titulo, descricao, url_noticia]
+            # Corrigir formato da data para evitar apóstrofo no Sheets
+            data_completa = datetime.combine(data_dt.date(), datetime.min.time())
+
+            linha = [data_completa, nome_ministerio, "Não disponível", titulo, descricao, url_noticia]
             gov_sheet.append_row(linha)
             add_scraped_url(sheet, url_noticia)
 
@@ -307,7 +272,10 @@ def processar_igualdade(sheet, url, data_desejada=None):
             descricao_tag = noticia.find('span', class_='descricao')
             descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
 
-            linha = [data_dt, nome_ministerio, subtitulo, titulo, descricao, url_noticia]
+            # Corrigir formato da data para evitar apóstrofo no Sheets
+            data_completa = datetime.combine(data_dt.date(), datetime.min.time())
+
+            linha = [data_completa, nome_ministerio, subtitulo, titulo, descricao, url_noticia]
             gov_sheet.append_row(linha)
             add_scraped_url(sheet, url_noticia)
 
