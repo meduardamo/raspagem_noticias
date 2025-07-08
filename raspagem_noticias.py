@@ -743,73 +743,34 @@ if __name__ == "__main__":
 # ANVISA
 
 import requests
-import gspread
-import pytz
-import urllib3
 from bs4 import BeautifulSoup
 from datetime import datetime
+import pytz
+import urllib3
+import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # Suprimir avisos SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Inicializar planilha
 def initialize_sheet():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
     client = gspread.authorize(creds)
     return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
 
+# Obter ou criar aba de URLs
 def get_or_create_worksheet(sheet, name, headers=None):
     try:
-        return sheet.worksheet(name)
+        ws = sheet.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=name, rows="100", cols="20")
         if headers:
             ws.append_row(headers)
-        return ws
+    return ws
 
-def get_already_scraped_urls(sheet):
-    urls_sheet = get_or_create_worksheet(sheet, "URLs", headers=["URLs"])
-    return set(urls_sheet.col_values(1)[1:])  # Ignora cabeçalho
-
-def add_scraped_url(sheet, url):
-    urls_sheet = get_or_create_worksheet(sheet, "URLs", headers=["URLs"])
-    urls_sheet.append_row([url])
-
-def raspar_anvisa_do_dia(sheet):
-    tz = pytz.timezone('America/Sao_Paulo')
-    data_hoje = datetime.now(tz)
-    data_hoje_str = data_hoje.strftime("%d/%m/%Y")
-    url = 'https://www.gov.br/an
-
-# FIOCRUZ
-
-import requests
-import gspread
-import pytz
-import urllib3
-from bs4 import BeautifulSoup
-from datetime import datetime
-from oauth2client.service_account import ServiceAccountCredentials
-
-# Suprimir avisos SSL
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-
-def get_or_create_worksheet(sheet, name, headers=None):
-    try:
-        return sheet.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sheet.add_worksheet(title=name, rows="100", cols="20")
-        if headers:
-            ws.append_row(headers)
-        return ws
-
+# URLs já raspadas
 def get_already_scraped_urls(sheet):
     urls_sheet = get_or_create_worksheet(sheet, "URLs", headers=["URLs"])
     return set(urls_sheet.col_values(1)[1:])
@@ -818,64 +779,76 @@ def add_scraped_url(sheet, url):
     urls_sheet = get_or_create_worksheet(sheet, "URLs", headers=["URLs"])
     urls_sheet.append_row([url])
 
-def raspar_fiocruz(sheet):
+# Função principal de raspagem
+def raspar_anvisa_do_dia(sheet):
     tz = pytz.timezone('America/Sao_Paulo')
-    data_desejada = datetime.now(tz)
-    data_desejada_str = data_desejada.strftime("%d/%m/%Y")
-    url = "https://fiocruz.br/noticias"
+    data_hoje = datetime.now(tz).date()
+    data_hoje_str = data_hoje.strftime("%d/%m/%Y")
+
+    url = 'https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
 
     try:
-        response = requests.get(url, verify=False, timeout=10)
+        response = requests.get(url, headers=headers, verify=False, timeout=10)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print(f"❌ Erro ao acessar Fiocruz: {e}")
+        print(f"❌ Erro ao acessar a Anvisa: {e}")
         return
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    blocos = soup.select("div.views-row")
+    soup = BeautifulSoup(response.text, 'html.parser')
+    noticias = soup.select('ul.noticias.listagem-noticias-com-foto > li')
     urls_existentes = get_already_scraped_urls(sheet)
-    aba_fiocruz = get_or_create_worksheet(sheet, "fiocruz", headers=["Data", "Título", "Descrição", "URL"])
+    aba_anvisa = get_or_create_worksheet(sheet, "anvisa", headers=["Data", "Ministério", "Subtítulo", "Título", "Descrição", "URL"])
 
     novas_linhas = []
 
-    for bloco in blocos:
-        try:
-            data_tag = bloco.find("div", class_="data-busca")
-            data_text = data_tag.find("time").text.strip() if data_tag else None
-
-            if not data_text or data_text != data_desejada_str:
-                continue
-
-            titulo_tag = bloco.find("div", class_="titulo-busca").find("a")
-            titulo = titulo_tag.text.strip()
-            link = "https://www.fiocruz.br" + titulo_tag["href"]
-
-            if link in urls_existentes:
-                continue
-
-            chamada_tag = bloco.find("div", class_="chamada-busca")
-            descricao = chamada_tag.text.strip() if chamada_tag else "Descrição não disponível"
-
-            data_dt = datetime.strptime(data_text, "%d/%m/%Y")
-            linha = [data_dt, titulo, descricao, link]
-
-            novas_linhas.append(linha)
-            add_scraped_url(sheet, link)
-
-        except Exception as e:
-            print(f"⚠️ Erro ao processar notícia da Fiocruz: {e}")
+    for noticia in noticias:
+        titulo_tag = noticia.find('h2', class_='titulo').find('a')
+        if not titulo_tag:
             continue
 
-    if novas_linhas:
-        aba_fiocruz.append_rows(novas_linhas, value_input_option='USER_ENTERED')
-        print(f"✅ {len(novas_linhas)} notícia(s) da Fiocruz adicionadas.")
-    else:
-        print("ℹ️ Nenhuma nova notícia da Fiocruz para hoje.")
+        titulo = titulo_tag.text.strip()
+        link = titulo_tag['href']
+        if link in urls_existentes:
+            continue
 
-# Execução
+        subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
+        subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
+
+        descricao_tag = noticia.find('span', class_='descricao')
+        if not descricao_tag:
+            continue
+
+        descricao_completa = descricao_tag.text.strip()
+        partes = descricao_completa.split('-')
+        data_lida_str = partes[0].strip()
+        descricao = partes[1].strip() if len(partes) > 1 else descricao_completa
+
+        try:
+            data_dt = datetime.strptime(data_lida_str, "%d/%m/%Y").date()
+        except ValueError:
+            continue
+
+        if data_dt != data_hoje:
+            continue
+
+        data_completa = datetime.combine(data_dt, datetime.min.time())
+        linha = [data_completa, "ANVISA", subtitulo, titulo, descricao, link]
+        novas_linhas.append(linha)
+        add_scraped_url(sheet, link)
+
+    if novas_linhas:
+        aba_anvisa.append_rows(novas_linhas, value_input_option='USER_ENTERED')
+        print(f"✅ {len(novas_linhas)} notícia(s) da ANVISA adicionada(s).")
+    else:
+        print("ℹ️ Nenhuma nova notícia da ANVISA para hoje.")
+
+# Executar
 if __name__ == "__main__":
     sheet = initialize_sheet()
-    raspar_fiocruz(sheet)
+    raspar_anvisa_do_dia(sheet)
 
 import requests
 from bs4 import BeautifulSoup
