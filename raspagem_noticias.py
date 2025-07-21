@@ -374,7 +374,7 @@ def raspar_noticias(url):
     except requests.exceptions.RequestException as err:
         print(f"Erro ao acessar o site: {err}")
 
-url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/06-1"
+url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/07"
 raspar_noticias(url)
 
 # ANS
