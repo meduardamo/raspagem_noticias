@@ -107,7 +107,14 @@ def raspar_noticias_por_data(url, sheet, data_desejada=None):
                             url                  # URL
                         ]
 
-                        sheet.sheet1.append_row(dados)
+                        # Salvar na aba 'gov' para ministérios
+                        try:
+                            gov_sheet = sheet.worksheet("gov")
+                        except gspread.exceptions.WorksheetNotFound:
+                            gov_sheet = sheet.add_worksheet(title="gov", rows="1000", cols="6")
+                            gov_sheet.append_row(["Data", "Ministério", "Subtítulo", "Título", "Descrição", "Link"])
+                        
+                        gov_sheet.append_row(dados)
                         add_scraped_url(sheet, url)
 
         print('Dados inseridos com sucesso na planilha.')
@@ -177,7 +184,14 @@ def raspar_noticias_por_data_mec(url, sheet, data_desejada=None):
                             link                 # URL
                         ]
 
-                        sheet.sheet1.append_row(dados)
+                        # Salvar na aba 'gov' para ministérios
+                        try:
+                            gov_sheet = sheet.worksheet("gov")
+                        except gspread.exceptions.WorksheetNotFound:
+                            gov_sheet = sheet.add_worksheet(title="gov", rows="1000", cols="6")
+                            gov_sheet.append_row(["Data", "Ministério", "Subtítulo", "Título", "Descrição", "Link"])
+                        
+                        gov_sheet.append_row(dados)
                         add_scraped_url(sheet, link)
 
         print('Dados inseridos com sucesso na planilha.')
@@ -243,7 +257,14 @@ def raspar_noticias_saude(url, data_desejada=None):
                     desc = noticia.find('span', class_='description')
                     descricao = desc.text.strip() if desc else "Descrição não disponível"
 
-                    sheet.sheet1.append_row([data, nome_ministerio, subtitulo, titulo, descricao, link])
+                    # Salvar na aba 'gov' para ministérios
+                    try:
+                        gov_sheet = sheet.worksheet("gov")
+                    except gspread.exceptions.WorksheetNotFound:
+                        gov_sheet = sheet.add_worksheet(title="gov", rows="1000", cols="6")
+                        gov_sheet.append_row(["Data", "Ministério", "Subtítulo", "Título", "Descrição", "Link"])
+                    
+                    gov_sheet.append_row([data, nome_ministerio, subtitulo, titulo, descricao, link])
                     add_scraped_url(sheet, link)
 
         print('Dados inseridos com sucesso na planilha.')
@@ -307,7 +328,14 @@ def raspar_noticias_povos_indigenas(url):
                     descricao_tag = noticia.find('p', class_='description discreet')
                     descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
 
-                    sheet.sheet1.append_row([data_formatada, nome_ministerio, "Não disponível", titulo, descricao, link])
+                    # Salvar na aba 'gov' para ministérios
+                    try:
+                        gov_sheet = sheet.worksheet("gov")
+                    except gspread.exceptions.WorksheetNotFound:
+                        gov_sheet = sheet.add_worksheet(title="gov", rows="1000", cols="6")
+                        gov_sheet.append_row(["Data", "Ministério", "Subtítulo", "Título", "Descrição", "Link"])
+                    
+                    gov_sheet.append_row([data_formatada, nome_ministerio, "Não disponível", titulo, descricao, link])
                     add_scraped_url(sheet, link)
 
         print('Raspagem concluída com sucesso.')
@@ -622,7 +650,14 @@ def raspar_noticias_igualdade_racial(url, data_desejada=None):
             descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
 
             if data == data_desejada and link not in already_scraped_urls:
-                sheet.sheet1.append_row([data, nome_ministerio, categoria, titulo, descricao, link])
+                # Salvar na aba 'gov' para ministérios
+                try:
+                    gov_sheet = sheet.worksheet("gov")
+                except gspread.exceptions.WorksheetNotFound:
+                    gov_sheet = sheet.add_worksheet(title="gov", rows="1000", cols="6")
+                    gov_sheet.append_row(["Data", "Ministério", "Subtítulo", "Título", "Descrição", "Link"])
+                
+                gov_sheet.append_row([data, nome_ministerio, categoria, titulo, descricao, link])
                 add_scraped_url(sheet, link)
 
         print('Dados inseridos com sucesso na planilha.')
