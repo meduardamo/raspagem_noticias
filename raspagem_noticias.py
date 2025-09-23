@@ -743,7 +743,7 @@ def raspar_noticias_por_data_consed(sheet, data_desejada=None, max_pages=5):
     if data_desejada is None:
         data_desejada = get_today_br()
 
-    # Recupera URLs já raspadas
+    # Recupera URLs já raspadas - agora usando o objeto sheet correto
     already_scraped_urls = get_already_scraped_urls(sheet)
 
     # Número da página inicial
@@ -811,7 +811,13 @@ def raspar_noticias_por_data_consed(sheet, data_desejada=None, max_pages=5):
 
     # Inserir todos os dados na planilha de uma vez
     if data:
-        sheet.append_rows(data)
+        try:
+            consed_sheet = sheet.worksheet('consed')
+        except gspread.exceptions.WorksheetNotFound:
+            consed_sheet = sheet.add_worksheet(title='consed', rows="1000", cols="4")
+            consed_sheet.append_row(["Data", "Título", "Descrição", "Link"])
+        
+        consed_sheet.append_rows(data)
         print('Dados inseridos com sucesso na planilha.')
     else:
         print('Nenhum dado encontrado para a data especificada.')
