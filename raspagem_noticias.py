@@ -1,1212 +1,725 @@
-# Preparando
+# -*- coding: utf-8 -*-
+"""
+Raspagem de notícias – múltiplas fontes gov/órgãos
+- Anti-rate-limit do Google Sheets (abre planilha 1x, cache de URLs, append em lote)
+- Retry com backoff em erros 429/limite
+- Fuso America/Recife
 
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import pytz
-import urllib3
+Ajuste o SHEET_ID se necessário e garanta que 'credentials.json' esteja no diretório.
+"""
+
 import re
-import pandas as pd
-
-"""# Ministério do Esporte"""
-
-# Suprimir avisos de solicitação insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
-
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
-    if data_desejada is None:
-        tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Levantará uma exceção para respostas 4xx/5xx
-
-        html_content = response.text
-        soup = BeautifulSoup(html_content, 'html.parser')
-        meta_tag = soup.find('meta', property="og:site_name")
-        nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
-        noticias = soup.find_all('li')
-
-        for noticia in noticias:
-            data_element = noticia.find('span', class_='data')
-            if data_element:
-                data_text_raw = data_element.text.strip()
-                try:
-                    data_text = datetime.strptime(data_text_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
-                except ValueError:
-                    print(f"Data encontrada inválida ou em formato desconhecido: {data_text_raw}")
-                    continue  # Skip to next news item if the date is invalid
-                if data_text == data_desejada:
-                    titulo_element = noticia.find('h2', class_='titulo')
-                    url = titulo_element.find('a')['href']
-                    if url not in already_scraped_urls:
-                        subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
-                        subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
-                        titulo = titulo_element.text.strip()
-                        descricao = noticia.find('span', class_='descricao')
-                        descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
-
-                        dados = [
-                            data_text,           # Data
-                            nome_ministerio,     # Nome do Ministério
-                            subtitulo,           # Subtítulo
-                            titulo,              # Título
-                            descricao_text,      # Descrição
-                            url                  # URL
-                        ]
-
-                        sheet.sheet1.append_row(dados)
-                        add_scraped_url(sheet, url)
-
-        print('Dados inseridos com sucesso na planilha.')
-
-    except requests.exceptions.HTTPError as errh:
-        print ("Http Error:", errh)
-    except requests.exceptions.ConnectionError as errc:
-        print ("Error Connecting:", errc)
-    except requests.exceptions.Timeout as errt:
-        print ("Timeout Error:", errt)
-    except requests.exceptions.RequestException as err:
-        print ("Oops: Something Else", err)
-
-# Exemplo de uso
-sheet = initialize_sheet()
-url = "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte"
-
-# Para raspar notícias da data atual
-raspar_noticias_por_data(url, sheet)
-
-"""# Ministério da Educação"""
-
-# Suprimir avisos de solicitação insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
-
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_noticias_por_data(url, sheet, data_desejada=None):
-    if data_desejada is None:
-        tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Levantará uma exceção para respostas 4xx/5xx
-
-        html_content = response.text
-        soup = BeautifulSoup(html_content, 'html.parser')
-        meta_tag = soup.find('meta', property="og:site_name")
-        nome_ministerio = meta_tag['content'] if meta_tag else "Nome do Ministério não identificado"
-        noticias = soup.find_all('li')
-
-        for noticia in noticias:
-            data_element = noticia.find('span', class_='data')
-            if data_element:
-                data_text_raw = data_element.text.strip()
-                try:
-                    data_text = datetime.strptime(data_text_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
-                except ValueError:
-                    print(f"Data encontrada inválida ou em formato desconhecido: {data_text_raw}")
-                    continue  # Skip to next news item if the date is invalid
-                if data_text == data_desejada:
-                    titulo_element = noticia.find('h2', class_='titulo')
-                    link = titulo_element.find('a')['href']
-                    if link not in already_scraped_urls:
-                        subtitulo = noticia.find('div', class_='subtitulo-noticia').text.strip()
-                        titulo = titulo_element.text.strip()
-                        descricao = noticia.find('span', class_='descricao')
-                        descricao_text = descricao.text.split('-')[1].strip() if '-' in descricao.text else descricao.text.strip()
-
-                        dados = [
-                            data_text,           # Data
-                            nome_ministerio,     # Nome do Ministério
-                            subtitulo,           # Subtítulo
-                            titulo,              # Título
-                            descricao_text,      # Descrição
-                            link                 # URL
-                        ]
-
-                        sheet.sheet1.append_row(dados)
-                        add_scraped_url(sheet, link)
-
-        print('Dados inseridos com sucesso na planilha.')
-
-    except requests.exceptions.HTTPError as errh:
-        print ("Http Error:", errh)
-    except requests.exceptions.ConnectionError as errc:
-        print ("Error Connecting:", errc)
-    except requests.exceptions.Timeout as errt:
-        print ("Timeout Error:", errt)
-    except requests.exceptions.RequestException as err:
-        print ("Oops: Something Else", err)
-
-# Exemplo de uso
-sheet = initialize_sheet()
-url = "https://www.gov.br/mec/pt-br/assuntos/noticias"
-
-# Para raspar notícias da data atual
-raspar_noticias_por_data(url, sheet)
-
-"""# Ministério da Saúde"""
-
-# Suprimir avisos de solicitação insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
-
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_noticias(url, data_desejada=None):
-    if data_desejada is None:
-        tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")
-
-    sheet = initialize_sheet()
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Levantará uma exceção para respostas 4xx/5xx
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        nome_ministerio_tag = soup.find('a', href="https://www.gov.br/saude/pt-br")
-        nome_ministerio = nome_ministerio_tag.text.strip() if nome_ministerio_tag else "Nome do Ministério não disponível"
-
-        noticias = soup.find_all('article', class_='tileItem')
-
-        for noticia in noticias:
-            data_icon = noticia.find('i', class_='icon-day')
-            data_raw = data_icon.find_next_sibling(string=True).strip() if data_icon else "Data não disponível"
-
-            try:
-                data = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
-            except ValueError:
-                print(f"Data encontrada inválida ou em formato desconhecido: {data_raw}")
-                continue  # Skip to next news item if the date is invalid
-
-            if data == data_desejada:
-                subt = noticia.find('span', class_='subtitle')
-                subtitulo = subt.text.strip() if subt else "Subtítulo não disponível"
-
-                tit = noticia.find('h2', class_='tileHeadline').find('a')
-                titulo = tit.text.strip() if tit else "Título não disponível"
-                link = tit['href'] if tit else "Link não disponível"
-
-                if link not in already_scraped_urls:
-                    desc = noticia.find('span', class_='description')
-                    descricao = desc.text.strip() if desc else "Descrição não disponível"
-
-                    sheet.sheet1.append_row([data, nome_ministerio, subtitulo, titulo, descricao, link])
-                    add_scraped_url(sheet, link)
-
-        print('Dados inseridos com sucesso na planilha.')
-
-    except requests.exceptions.HTTPError as errh:
-        print ("Http Error:", errh)
-    except requests.exceptions.ConnectionError as errc:
-        print ("Error Connecting:", errc)
-    except requests.exceptions.Timeout as errt:
-        print ("Timeout Error:", errt)
-    except requests.exceptions.RequestException as err:
-        print ("Oops: Something Else", err)
-
-# Exemplo de uso
-url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
-raspar_noticias(url)
-
-"""# Povos Indígenas - Notícias do dia"""
+import time
+from typing import Dict, List, Optional
+from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
+from google.oauth2.service_account import Credentials
+import pandas as pd
 import pytz
-import urllib3
 
-# Suprimir avisos de solicitação insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# -------------------------------------------------------------------
+# Configs globais
+# -------------------------------------------------------------------
+TZ = pytz.timezone("America/Recife")
+SHEET_ID = "1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY"
+JSON_KEYFILE = "credentials.json"
+DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
+RATE_LIMIT_PAT = re.compile(r"(RATE_LIMIT_EXCEEDED|ReadRequestsPerMinutePerUser|quota.*per minute)", re.I)
 
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])
 
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_noticias(url):
-    # Data de hoje no formato brasileiro
-    tz = pytz.timezone('America/Sao_Paulo')
-    data_hoje = datetime.now(tz).strftime("%d/%m/%Y")
-
-    sheet = initialize_sheet()
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        noticias = soup.find_all('article', class_='entry')
-
-        nome_ministerio_tag = soup.find('a', href="https://www.gov.br/povosindigenas/pt-br")
-        nome_ministerio = nome_ministerio_tag.text.strip() if nome_ministerio_tag else "Ministério dos Povos Indígenas"
-
-        for noticia in noticias:
-            titulo_tag = noticia.find('span', class_='summary').find('a')
-            titulo = titulo_tag.text.strip() if titulo_tag else "Título não disponível"
-            link = titulo_tag['href'] if titulo_tag else "Link não disponível"
-
-            data_tag = noticia.find('span', class_='documentByLine')
-            if not data_tag:
+def with_gspread_retry(fn, *args, **kwargs):
+    """Executa chamadas gspread com retry exponencial quando tomar 429/limite."""
+    max_attempts = kwargs.pop("_max_attempts", 6)
+    backoff = kwargs.pop("_backoff_start", 1.5)
+    attempt = 0
+    while True:
+        try:
+            return fn(*args, **kwargs)
+        except gspread.exceptions.APIError as e:
+            msg = str(e)
+            if RATE_LIMIT_PAT.search(msg) and attempt < max_attempts - 1:
+                sleep_s = backoff * (2 ** attempt)
+                # jitter leve
+                sleep_s = sleep_s * (1 + 0.15 * (attempt % 3))
+                print(f"⏳ Rate limit do Sheets (tentativa {attempt+1}/{max_attempts}). Aguardando {sleep_s:.1f}s…")
+                time.sleep(sleep_s)
+                attempt += 1
                 continue
+            raise  # outros erros, ou excedeu tentativas
 
-            texto_data = data_tag.text.strip()
-            if "última modificação" in texto_data:
-                partes = texto_data.split("última modificação")
-                data_raw = partes[-1].strip().split()[0]  # Tenta pegar a data
 
-                try:
-                    data_formatada = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
-                except ValueError:
-                    continue  # Ignora se a data for inválida
+class SheetManager:
+    """
+    - Abre a planilha 1x (por key).
+    - Mantém cache do set de URLs (aba 'URLs').
+    - Bufferiza appends por aba e envia em lote (append_rows).
+    """
+    def __init__(self, sheet_id: str, json_keyfile: str, urls_tab: str = "URLs", batch_size: int = 50):
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_file(json_keyfile, scopes=scopes)
+        self.client = gspread.authorize(creds)
+        self.sheet = with_gspread_retry(self.client.open_by_key, sheet_id)
+        self.urls_tab_name = urls_tab
+        self.batch_size = batch_size
+        self._ws_cache: Dict[str, gspread.Worksheet] = {}
+        self._urls_ws = self._get_or_create_ws(urls_tab, rows=1, cols=1)
+        self._url_set = self._load_url_set()
+        self._buffers: Dict[str, List[List[str]]] = {}
 
-                # ✅ Verifica se é do dia atual
-                if data_formatada == data_hoje and link not in already_scraped_urls:
-                    descricao_tag = noticia.find('p', class_='description discreet')
-                    descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
+    def now_br(self) -> str:
+        return datetime.now(TZ).strftime("%d/%m/%Y")
 
-                    sheet.sheet1.append_row([data_formatada, nome_ministerio, "Não disponível", titulo, descricao, link])
-                    add_scraped_url(sheet, link)
+    # ---------- Worksheet helpers ----------
+    def _get_or_create_ws(self, title: str, rows: int = 100, cols: int = 10) -> gspread.Worksheet:
+        try:
+            return with_gspread_retry(self.sheet.worksheet, title)
+        except gspread.exceptions.WorksheetNotFound:
+            return with_gspread_retry(self.sheet.add_worksheet, title=title, rows=str(rows), cols=str(cols))
 
-        print('Raspagem concluída com sucesso.')
+    def worksheet(self, title: str) -> gspread.Worksheet:
+        if title not in self._ws_cache:
+            self._ws_cache[title] = self._get_or_create_ws(title)
+        return self._ws_cache[title]
 
-    except requests.exceptions.RequestException as err:
-        print(f"Erro ao acessar o site: {err}")
+    def ensure_header(self, tab: str, header: List[str]):
+        ws = self.worksheet(tab)
+        first = with_gspread_retry(ws.row_values, 1)
+        if not first:
+            with_gspread_retry(ws.append_row, header)
 
-url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/07"
-raspar_noticias(url)
+    # ---------- URLs cache ----------
+    def _load_url_set(self) -> set:
+        vals = with_gspread_retry(self._urls_ws.col_values, 1) or []
+        if not vals:
+            with_gspread_retry(self._urls_ws.append_row, ["URLs"])
+            return set()
+        return set(vals[1:])  # sem header
 
-# ANS
+    def seen_url(self, url: str) -> bool:
+        return url in self._url_set
 
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from google.oauth2.service_account import Credentials
-import pandas as pd
-import urllib3
-import certifi
-import time
-from requests.exceptions import ChunkedEncodingError
+    def add_url(self, url: str):
+        if url and url not in self._url_set:
+            with_gspread_retry(self._urls_ws.append_row, [url])
+            self._url_set.add(url)
 
-# Suprimir avisos de solicitação insegura (útil para sites sem HTTPS completo, não é o caso aqui)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    # ---------- Buffer ----------
+    def buffer_row(self, tab: str, row: List[str]):
+        if tab not in self._buffers:
+            self._buffers[tab] = []
+        self._buffers[tab].append(row)
+        if len(self._buffers[tab]) >= self.batch_size:
+            self.flush(tab)
 
-def initialize_sheet(sheet_id, json_keyfile):
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
-    client = gspread.authorize(credentials)
-    sheet = client.open_by_key(sheet_id)
-    return sheet
+    def flush(self, tab: Optional[str] = None):
+        tabs = [tab] if tab else list(self._buffers.keys())
+        for t in tabs:
+            buf = self._buffers.get(t, [])
+            if not buf:
+                continue
+            ws = self.worksheet(t)
+            with_gspread_retry(ws.append_rows, buf, value_input_option="USER_ENTERED")
+            self._buffers[t] = []
 
-def get_already_scraped_urls(sheet):
+    def close(self):
+        self.flush()
+
+
+# -------------------------------------------------------------------
+# Scrapers
+# -------------------------------------------------------------------
+
+def scrape_gov_listagem_padrao(manager: SheetManager, url: str, tab: str):
+    """
+    Padrão gov.br (listas em <li>, data em <span class='data'>, título em <h2 class='titulo'> <a>).
+    Colunas: Data | Órgão | Subtítulo | Título | Descrição | Link
+    """
+    data_desejada = manager.now_br()
     try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-import time
-from requests.exceptions import ChunkedEncodingError
-import certifi
-
-def scrape_ans_news(url, sheet, max_retries=3):
-    def safe_request(url):
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(url, verify=certifi.where(), timeout=15)
-                response.raise_for_status()
-                return response
-            except ChunkedEncodingError as e:
-                print(f"⚠️ Tentativa {attempt+1}: erro de leitura incompleta (ChunkedEncodingError) - {e}")
-            except requests.exceptions.RequestException as e:
-                print(f"⚠️ Tentativa {attempt+1}: erro ao acessar {url} - {e}")
-            time.sleep(2)
-        return None
-
-    response = safe_request(url)
-    if response is None:
-        print("❌ Falha ao obter resposta da ANS após múltiplas tentativas.")
-        return []
-
-    soup = BeautifulSoup(response.content, 'html.parser')
-    data_list = []
-    news_blocks = soup.find_all('div', class_='conteudo')
-
-    already_scraped = get_already_scraped_urls(sheet)
-
-    for block in news_blocks:
-        subtitulo_tag = block.find('div', class_='subtitulo-noticia')
-        subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
-
-        titulo_tag = block.find('a', href=True)
-        titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
-        link = titulo_tag['href'] if titulo_tag else 'N/A'
-
-        if link in already_scraped:
-            continue
-        add_scraped_url(sheet, link)
-
-        data_tag = block.find('span', class_='data')
-        data = data_tag.get_text(strip=True) if data_tag else 'N/A'
-
-        descricao_tag = block.find('span', class_='descricao')
-        descricao = 'N/A'
-        if descricao_tag:
-            full_text = descricao_tag.get_text(strip=True)
-            data_text = data_tag.get_text(strip=True) if data_tag else ''
-            descricao = full_text.replace(data_text, '').strip()
-
-        data_list.append({
-            'Data': data,
-            'Subtítulo': subtitulo,
-            'Título': titulo,
-            'Descrição': descricao,
-            'Link': link
-        })
-
-    return data_list
-
-def export_to_google_sheets(data_list, sheet_id, json_keyfile):
-    sheet = initialize_sheet(sheet_id, json_keyfile)
-    worksheet_name = "ans"
-
-    try:
-        worksheet = sheet.worksheet(worksheet_name)
-    except gspread.exceptions.WorksheetNotFound:
-        worksheet = sheet.add_worksheet(title=worksheet_name, rows="100", cols="5")
-
-    df = pd.DataFrame(data_list)
-
-    worksheet.clear()
-    if not df.empty:
-        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-        print("Dados inseridos com sucesso na aba 'ans'.")
-    else:
-        print("Nenhum dado novo para inserir.")
-
-def main():
-    url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
-    sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
-    json_keyfile = 'credentials.json'
-
-    sheet = initialize_sheet(sheet_id, json_keyfile)
-    data_list = scrape_ans_news(url, sheet)
-    export_to_google_sheets(data_list, sheet_id, json_keyfile)
-
-if __name__ == "__main__":
-    main()
-    
-"""# CFM"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from google.oauth2.service_account import Credentials
-import pandas as pd
-import urllib3
-from datetime import datetime
-import pytz
-
-# Suprimir avisos de requisição insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-# Mapeamento dos meses
-MESES = {
-    'jan': '01',
-    'fev': '02',
-    'mar': '03',
-    'abr': '04',
-    'mai': '05',
-    'jun': '06',
-    'jul': '07',
-    'ago': '08',
-    'set': '09',
-    'out': '10',
-    'nov': '11',
-    'dez': '12'
-}
-
-# Inicializa a conexão com a planilha do Google Sheets
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
-
-# Função para verificar URLs já raspadas
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclui o cabeçalho
-
-# Função para adicionar uma URL já raspada
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-# Função para raspar notícias do CFM
-def scrape_cfm_news(url, sheet):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    data_list = []  # Lista para armazenar os dados antes de enviar para o Google Sheets
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Levanta uma exceção para respostas 4xx/5xx
-
-        soup = BeautifulSoup(response.content, 'html.parser')
-
-        # Verificar URLs já raspadas
-        already_scraped_urls = get_already_scraped_urls(sheet)
-
-        # Raspar o título corretamente da tag <h3>
-        title_tag = soup.find('h3')
-        title = title_tag.text.strip() if title_tag else 'N/A'
-
-        # Raspar o link corretamente da tag <a> com a classe "c-default"
-        link_tag = soup.find('a', class_='c-default', href=True)
-        link = link_tag['href'] if link_tag else 'N/A'
-
-        # Verificar se a URL já foi raspada
-        if link not in already_scraped_urls:
-            # Capturar a data: dia na tag <h3> e mês/ano na tag <div> logo abaixo
-            date_div = soup.find('div', class_='noticia-date')
-            day_tag = date_div.find('h3') if date_div else None
-            month_year_div = date_div.find('div') if date_div else None
-
-            # Capturar o dia
-            day = day_tag.text.strip() if day_tag else 'N/A'
-
-            # Capturar o mês e o ano (remover quebras de linha e <br>)
-            if month_year_div:
-                month_year_parts = month_year_div.get_text(separator=" ").split()
-                if len(month_year_parts) >= 2:
-                    month = month_year_parts[0]
-                    year = month_year_parts[1]
-                else:
-                    month, year = 'N/A', 'N/A'
-            else:
-                month, year = 'N/A', 'N/A'
-
-            # Combinar dia, mês e ano em uma única string
-            date_text = f"{day} {month} {year}".strip()
-
-            # Raspar a descrição corretamente (conteúdo da tag <p>)
-            description_tag = soup.find('p')
-            description = description_tag.text.strip() if description_tag else 'N/A'
-
-            # Adicionar os dados à lista, na ordem correta: Data, Título, Descrição, Link
-            data_list.append({
-                'Data': date_text,
-                'Título': title,
-                'Descrição': description,
-                'Link': link
-            })
-
-            # Acessa a aba "cfm" da planilha
-            worksheet = sheet.worksheet("cfm")
-
-            # Verificar se é necessário adicionar os cabeçalhos
-            if worksheet.row_count == 1 and worksheet.cell(1, 1).value is None:
-                # Adicionar cabeçalhos
-                worksheet.append_row(["Data", "Título", "Descrição", "Link"])
-
-            # Converter a lista de dicionários em DataFrame
-            df = pd.DataFrame(data_list)
-
-            # Se houver dados, adicioná-los à planilha
-            if not df.empty:
-                worksheet.append_rows(df.values.tolist())
-
-            # Adicionar a URL à lista de URLs raspadas
-            add_scraped_url(sheet, link)
-
-            print('Dados inseridos com sucesso na aba "cfm".')
-
-        else:
-            print(f"URL já raspada: {link}")
-
-    except requests.exceptions.HTTPError as errh:
-        print("Erro HTTP:", errh)
-    except requests.exceptions.ConnectionError as errc:
-        print("Erro de Conexão:", errc)
-    except requests.exceptions.Timeout as errt:
-        print("Erro de Timeout:", errt)
-    except requests.exceptions.RequestException as err:
-        print("Outro erro ocorreu:", err)
-
-# Exemplo de uso
-sheet = initialize_sheet()
-url = "https://portal.cfm.org.br/noticias/?s="
-scrape_cfm_news(url, sheet)
-
-"""# FIOCRUZ"""
-
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import pytz
-import urllib3
-
-# Suprimir avisos de solicitação insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    return set(urls_sheet.col_values(1)[1:])
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_fiocruz(sheet):
-    tz = pytz.timezone('America/Sao_Paulo')
-    data_desejada = datetime.now(tz).strftime("%d/%m/%Y")
-    url = "https://fiocruz.br/noticias"
-
-    try:
-        response = requests.get(url, verify=False, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Erro ao acessar Fiocruz: {e}")
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro ao acessar {url}: {e}")
         return
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    blocos = soup.select("div.views-row")
-    urls_existentes = get_already_scraped_urls(sheet)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    og = soup.find("meta", property="og:site_name")
+    orgao = og["content"].strip() if og and og.get("content") else "—"
+    itens = soup.find_all("li")
 
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    added = 0
+    for it in itens:
+        sd = it.find("span", class_="data")
+        if not sd:
+            continue
+        data_raw = sd.get_text(strip=True)
+        try:
+            data_fmt = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+        if data_fmt != data_desejada:
+            continue
+
+        h2 = it.find("h2", class_="titulo")
+        a = h2.find("a") if h2 else None
+        if not a:
+            continue
+        link = a.get("href", "").strip()
+        if not link or manager.seen_url(link):
+            continue
+
+        subt_tag = it.find("div", class_="subtitulo-noticia")
+        subt = subt_tag.get_text(strip=True) if subt_tag else "—"
+        titulo = a.get_text(strip=True)
+
+        desc_span = it.find("span", class_="descricao")
+        if desc_span:
+            txt = desc_span.get_text(strip=True)
+            # padrão "DD/MM/AAAA - descrição"
+            if "-" in txt:
+                descricao = txt.split("-", 1)[1].strip()
+            else:
+                descricao = txt
+        else:
+            descricao = "—"
+
+        manager.buffer_row(tab, [data_fmt, orgao, subt, titulo, descricao, link])
+        manager.add_url(link)
+        added += 1
+    print(f"✅ {tab}: {added} item(ns) bufferizados.")
+
+
+def scrape_saude(manager: SheetManager):
+    """
+    Ministério da Saúde (estrutura em <article class='tileItem'>)
+    Colunas: Data | Órgão | Subtítulo | Título | Descrição | Link
+    """
+    url = "https://www.gov.br/saude/pt-br/assuntos/noticias"
+    data_desejada = manager.now_br()
     try:
-        aba = sheet.worksheet("fiocruz")
-    except gspread.exceptions.WorksheetNotFound:
-        aba = sheet.add_worksheet(title="fiocruz", rows="100", cols="6")
-        aba.append_row(["Data", "Título", "Descrição", "Link"])
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro Saúde: {e}")
+        return
 
-    novas_linhas = []
-    for bloco in blocos:
+    soup = BeautifulSoup(resp.text, "html.parser")
+    org_tag = soup.find('a', href="https://www.gov.br/saude/pt-br")
+    orgao = org_tag.text.strip() if org_tag else "Ministério da Saúde"
+    noticias = soup.find_all("article", class_="tileItem")
+
+    tab = "saude"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    added = 0
+    for n in noticias:
+        data_icon = n.find("i", class_="icon-day")
+        data_raw = data_icon.find_next_sibling(string=True).strip() if data_icon else ""
+        try:
+            data_fmt = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+        if data_fmt != data_desejada:
+            continue
+
+        subt = n.find("span", class_="subtitle")
+        subtitulo = subt.get_text(strip=True) if subt else "—"
+
+        h2a = n.find("h2", class_="tileHeadline")
+        a = h2a.find("a") if h2a else None
+        if not a:
+            continue
+        titulo = a.get_text(strip=True)
+        link = a.get("href", "").strip()
+        if not link or manager.seen_url(link):
+            continue
+
+        desc = n.find("span", class_="description")
+        descricao = desc.get_text(strip=True) if desc else "—"
+
+        manager.buffer_row(tab, [data_fmt, orgao, subtitulo, titulo, descricao, link])
+        manager.add_url(link)
+        added += 1
+
+    print(f"✅ saude: {added} item(ns) bufferizados.")
+
+
+def scrape_povos_indigenas(manager: SheetManager):
+    """
+    Ministério dos Povos Indígenas (página por mês/ano; usa 'última modificação' no byline)
+    Colunas: Data | Órgão | Subtítulo | Título | Descrição | Link
+    """
+    # Ajuste a URL conforme o mês corrente se preferir.
+    url = "https://www.gov.br/povosindigenas/pt-br/assuntos/noticias/2025/07"
+    data_hoje = manager.now_br()
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro Povos Indígenas: {e}")
+        return
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    tab = "povos_indigenas"
+    org_tag = soup.find('a', href="https://www.gov.br/povosindigenas/pt-br")
+    orgao = org_tag.text.strip() if org_tag else "Ministério dos Povos Indígenas"
+
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    noticias = soup.find_all('article', class_='entry')
+    added = 0
+    for noticia in noticias:
+        sum_tag = noticia.find('span', class_='summary')
+        a = sum_tag.find('a') if sum_tag else None
+        if not a:
+            continue
+        titulo = a.get_text(strip=True)
+        link = a.get("href", "").strip()
+        if not link or manager.seen_url(link):
+            continue
+
+        data_tag = noticia.find('span', class_='documentByLine')
+        if not data_tag:
+            continue
+        texto_data = data_tag.get_text(strip=True)
+        if "última modificação" not in texto_data.lower():
+            continue
+
+        try:
+            # tenta primeira data com padrão dd/mm/aaaa
+            m = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", texto_data)
+            if not m:
+                continue
+            data_fmt = datetime.strptime(m.group(1), "%d/%m/%Y").strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+
+        if data_fmt != data_hoje:
+            continue
+
+        desc_tag = noticia.find('p', class_='description discreet')
+        descricao = desc_tag.get_text(strip=True) if desc_tag else "—"
+
+        manager.buffer_row(tab, [data_fmt, orgao, "—", titulo, descricao, link])
+        manager.add_url(link)
+        added += 1
+
+    print(f"✅ povos_indigenas: {added} item(ns) bufferizados.")
+
+
+def scrape_ans(manager: SheetManager):
+    """
+    ANS – listas em <div class='conteudo'>
+    Colunas: Data | Subtítulo | Título | Descrição | Link (mantemos padrão geral Data | Órgão | Subtítulo | Título | Descrição | Link)
+    """
+    url = "https://www.gov.br/ans/pt-br/assuntos/noticias"
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro ANS: {e}")
+        return
+
+    soup = BeautifulSoup(resp.content, "html.parser")
+    blocks = soup.find_all("div", class_="conteudo")
+
+    tab = "ans"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    added = 0
+    for b in blocks:
+        subt_tag = b.find("div", class_="subtitulo-noticia")
+        subt = subt_tag.get_text(strip=True) if subt_tag else "—"
+
+        a = b.find("a", href=True)
+        if not a:
+            continue
+        titulo = a.get_text(strip=True)
+        link = a.get("href", "").strip()
+        if not link or manager.seen_url(link):
+            continue
+
+        data_tag = b.find("span", class_="data")
+        data_txt = data_tag.get_text(strip=True) if data_tag else ""
+        # descrição: texto de <span class='descricao'>, menos a data no início, quando existir
+        desc_tag = b.find("span", class_="descricao")
+        if desc_tag:
+            full = desc_tag.get_text(strip=True)
+            descricao = full.replace(data_txt, "").strip() if data_txt else full
+        else:
+            descricao = "—"
+
+        manager.buffer_row(tab, [data_txt, "ANS", subt, titulo, descricao, link])
+        manager.add_url(link)
+        added += 1
+
+    print(f"✅ ans: {added} item(ns) bufferizados.")
+
+
+def scrape_cfm(manager: SheetManager):
+    """
+    CFM – página inicial de notícias, captura primeiro card (título/link/data/descrição).
+    Colunas: Data | Título | Descrição | Link  (aqui manteremos padrão com Órgão também)
+    """
+    url = "https://portal.cfm.org.br/noticias/?s="
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro CFM: {e}")
+        return
+
+    soup = BeautifulSoup(resp.content, "html.parser")
+    tab = "cfm"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    # Título (primeiro h3 da listagem), link (a.c-default), data (div.noticia-date), descrição (primeiro <p>)
+    title_tag = soup.find("h3")
+    title = title_tag.get_text(strip=True) if title_tag else None
+
+    link_tag = soup.find("a", class_="c-default", href=True)
+    link = link_tag.get("href", "").strip() if link_tag else None
+
+    if not title or not link or manager.seen_url(link):
+        print("✅ cfm: nada novo.")
+        return
+
+    date_div = soup.find("div", class_="noticia-date")
+    day_tag = date_div.find("h3") if date_div else None
+    day = day_tag.get_text(strip=True) if day_tag else ""
+
+    month_year_div = date_div.find("div") if date_div else None
+    month, year = "", ""
+    if month_year_div:
+        parts = month_year_div.get_text(separator=" ").split()
+        if len(parts) >= 2:
+            month, year = parts[0], parts[1]
+    data_txt = f"{day} {month} {year}".strip()
+
+    desc_tag = soup.find("p")
+    descricao = desc_tag.get_text(strip=True) if desc_tag else "—"
+
+    manager.buffer_row(tab, [data_txt, "CFM", "—", title, descricao, link])
+    manager.add_url(link)
+    print("✅ cfm: 1 item bufferizado.")
+
+
+def scrape_fiocruz(manager: SheetManager):
+    """
+    Fiocruz – lista em div.views-row
+    Colunas: Data | Título | Descrição | Link  (padronizado com Órgão e Subtítulo '—')
+    """
+    url = "https://fiocruz.br/noticias"
+    data_desejada = manager.now_br()
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro Fiocruz: {e}")
+        return
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    blocks = soup.select("div.views-row")
+
+    tab = "fiocruz"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    added = 0
+    for bloco in blocks:
         data_tag = bloco.find("div", class_="data-busca")
         if not data_tag:
             continue
-        data = data_tag.find("time").text.strip()
-        if data != data_desejada:
+        time_tag = data_tag.find("time")
+        data_txt = time_tag.get_text(strip=True) if time_tag else ""
+        if data_txt != data_desejada:
             continue
 
-        titulo_tag = bloco.find("div", class_="titulo-busca").find("a")
-        titulo = titulo_tag.text.strip()
-        link = "https://www.fiocruz.br" + titulo_tag["href"]
-
-        if link in urls_existentes:
+        titulo_tag = bloco.find("div", class_="titulo-busca")
+        a = titulo_tag.find("a") if titulo_tag else None
+        if not a:
+            continue
+        titulo = a.get_text(strip=True)
+        href = a.get("href", "").strip()
+        link = f"https://www.fiocruz.br{href}" if href and href.startswith("/") else href
+        if not link or manager.seen_url(link):
             continue
 
-        chamada_tag = bloco.find("div", class_="chamada-busca")
-        descricao = chamada_tag.text.strip() if chamada_tag else ""
+        ch = bloco.find("div", class_="chamada-busca")
+        descricao = ch.get_text(strip=True) if ch else "—"
 
-        novas_linhas.append([data, titulo, descricao, link])
-        add_scraped_url(sheet, link)
+        manager.buffer_row(tab, [data_txt, "Fiocruz", "—", titulo, descricao, link])
+        manager.add_url(link)
+        added += 1
 
-    if novas_linhas:
-        aba.append_rows(novas_linhas)
-        print(f"✅ {len(novas_linhas)} notícia(s) da Fiocruz adicionadas.")
-    else:
-        print("⚠️ Nenhuma nova notícia da Fiocruz para hoje.")
+    print(f"✅ fiocruz: {added} item(ns) bufferizados.")
 
-# Executar
-sheet = initialize_sheet()
-raspar_fiocruz(sheet)
 
-"""# Igualdade Racial"""
-
-# Suprimir avisos de solicitação insegura
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-    return sheet
-
-def get_already_scraped_urls(sheet):
+def scrape_igualdade_racial(manager: SheetManager):
+    """
+    Igualdade Racial – div.conteudo
+    Colunas: Data | Órgão | Categoria | Título | Descrição | Link
+    (Categoria vai na coluna 'Subtítulo' para padronização)
+    """
+    url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
+    data_desejada = manager.now_br()
     try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_noticias(url, data_desejada=None):
-    if data_desejada is None:
-        tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Data atual no fuso horário do Brasil
-
-    sheet = initialize_sheet()
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        noticias = soup.find_all('div', class_='conteudo')
-
-        nome_ministerio_tag = soup.find('a', href="https://www.gov.br/igualdaderacial/pt-br")
-        nome_ministerio = nome_ministerio_tag.text.strip() if nome_ministerio_tag else "Nome do Ministério não disponível"
-
-        for noticia in noticias:
-            categoria_tag = noticia.find('div', class_='categoria-noticia')
-            categoria = categoria_tag.text.strip() if categoria_tag else "Categoria não disponível"
-
-            titulo_tag = noticia.find('h2', class_='titulo').find('a')
-            titulo = titulo_tag.text.strip() if titulo_tag else "Título não disponível"
-            link = titulo_tag['href'] if titulo_tag else "Link não disponível"
-
-            data_tag = noticia.find('span', class_='data')
-            data_raw = data_tag.text.strip() if data_tag else "Data não disponível"
-
-            try:
-                data = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
-            except ValueError:
-                print(f"Data encontrada inválida ou em formato desconhecido: {data_raw}")
-                continue  # Skip to next news item if the date is invalid
-
-            descricao_tag = noticia.find('span', class_='descricao')
-            descricao = descricao_tag.text.strip() if descricao_tag else "Descrição não disponível"
-
-            if data == data_desejada and link not in already_scraped_urls:
-                sheet.sheet1.append_row([data, nome_ministerio, categoria, titulo, descricao, link])
-                add_scraped_url(sheet, link)
-
-        print('Dados inseridos com sucesso na planilha.')
-
-    except requests.exceptions.HTTPError as errh:
-        print("HTTP Error:", errh)
-    except requests.exceptions.ConnectionError as errc:
-        print("Error Connecting:", errc)
-    except requests.exceptions.Timeout as errt:
-        print("Timeout Error:", errt)
-    except requests.exceptions.RequestException as err:
-        print("Oops: Something Else", err)
-
-# Exemplo de uso
-url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
-data_especifica = "22/05/2024"
-raspar_noticias(url)
-
-"""# ANS"""
-
-import requests
-from bs4 import BeautifulSoup
-import gspread
-from google.oauth2.service_account import Credentials
-import pandas as pd
-
-# Função para raspar dados da página da ANS
-def scrape_ans_news(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    data_list = []
-
-    # Encontre todos os blocos de notícias
-    news_blocks = soup.find_all('div', class_='conteudo')
-
-    for block in news_blocks:
-        # Verificar se o subtítulo existe antes de tentar acessar seu texto
-        subtitulo_tag = block.find('div', class_='subtitulo-noticia')
-        subtitulo = subtitulo_tag.get_text(strip=True) if subtitulo_tag else 'N/A'
-        
-        # Verificar se o título e o link existem antes de tentar acessá-los
-        titulo_tag = block.find('a', href=True)
-        titulo = titulo_tag.get_text(strip=True) if titulo_tag else 'N/A'
-        link = titulo_tag['href'] if titulo_tag else 'N/A'
-        
-        # Verificar se a data existe antes de tentar acessar seu texto
-        data_tag = block.find('span', class_='data')
-        data = data_tag.get_text(strip=True) if data_tag else 'N/A'
-
-        # Adicionar os dados à lista
-        data_list.append({
-            'Data': data,
-            'Subtítulo': subtitulo,
-            'Título': titulo,
-            'Link': link
-        })
-
-    return data_list
-
-# Autenticar e acessar a planilha do Google Sheets
-def export_to_google_sheets(data_list, sheet_url, json_keyfile):
-    # Configurações da API do Google Sheets
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
-             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-
-    credentials = Credentials.from_service_account_file(json_keyfile, scopes=scope)
-    client = gspread.authorize(credentials)
-
-    # Acessar a planilha e aba específica
-    sheet = client.open_by_url(sheet_url)
-    worksheet = sheet.worksheet('ans')
-
-    # Converter a lista de dicionários em DataFrame para fácil manipulação
-    df = pd.DataFrame(data_list)
-
-    # Limpar a aba antes de adicionar novos dados
-    worksheet.clear()
-
-    # Atualizar a aba com novos dados
-    worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-
-# URL da página da ANS
-url = 'https://www.gov.br/ans/pt-br/assuntos/noticias'
-
-# Planilha Google Sheets (atualizada para o novo link fornecido)
-sheet_url = 'https://docs.google.com/spreadsheets/d/1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY/edit?gid=0#gid=0'
-
-# Caminho para o arquivo JSON de credenciais
-json_keyfile = 'credentials.json'
-
-# Executar a raspagem e exportar para Google Sheets
-data_list = scrape_ans_news(url)
-export_to_google_sheets(data_list, sheet_url, json_keyfile)
-
-# ANVISA – Raspagem de notícias do dia atual
-
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
-import pytz
-import urllib3
-
-# Suprimir avisos SSL
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def initialize_sheet():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    return client.open_by_key('1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY')
-
-def get_already_scraped_urls(sheet):
-    try:
-        urls_sheet = sheet.worksheet("URLs")
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.add_worksheet(title="URLs", rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])
-
-def add_scraped_url(sheet, url):
-    urls_sheet = sheet.worksheet("URLs")
-    urls_sheet.append_row([url])
-
-def raspar_anvisa_do_dia(sheet):
-    tz = pytz.timezone('America/Sao_Paulo')
-    data_hoje = datetime.now(tz).strftime("%d/%m/%Y")
-    url = 'https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-    }
-
-    try:
-        response = requests.get(url, headers=headers, verify=False, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"Erro ao acessar a Anvisa: {e}")
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro Igualdade Racial: {e}")
         return
 
-    soup = BeautifulSoup(response.text, 'html.parser')
-    noticias = soup.select('ul.noticias.listagem-noticias-com-foto > li')
-    urls_existentes = get_already_scraped_urls(sheet)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    blocks = soup.find_all("div", class_="conteudo")
 
-    for noticia in noticias:
-        titulo_tag = noticia.find('h2', class_='titulo').find('a')
-        if not titulo_tag:
+    tab = "igualdade_racial"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    org_tag = soup.find('a', href="https://www.gov.br/igualdaderacial/pt-br")
+    orgao = org_tag.get_text(strip=True) if org_tag else "Ministério da Igualdade Racial"
+
+    added = 0
+    for b in blocks:
+        cat_tag = b.find("div", class_="categoria-noticia")
+        subt = cat_tag.get_text(strip=True) if cat_tag else "—"
+
+        h2 = b.find("h2", class_="titulo")
+        a = h2.find("a") if h2 else None
+        if not a:
+            continue
+        titulo = a.get_text(strip=True)
+        link = a.get("href", "").strip()
+        if not link or manager.seen_url(link):
             continue
 
-        titulo = titulo_tag.text.strip()
-        link = titulo_tag['href']
-        if link in urls_existentes:
+        data_tag = b.find("span", class_="data")
+        data_raw = data_tag.get_text(strip=True) if data_tag else ""
+        try:
+            data_fmt = datetime.strptime(data_raw, "%d/%m/%Y").strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+        if data_fmt != data_desejada:
             continue
 
-        subtitulo_tag = noticia.find('div', class_='subtitulo-noticia')
-        subtitulo = subtitulo_tag.text.strip() if subtitulo_tag else "Subtítulo não disponível"
+        desc_tag = b.find("span", class_="descricao")
+        descricao = desc_tag.get_text(strip=True) if desc_tag else "—"
 
-        descricao_tag = noticia.find('span', class_='descricao')
-        if descricao_tag:
-            descricao_completa = descricao_tag.text.strip()
-            partes = descricao_completa.split('-')
-            data_lida = partes[0].strip()
-            descricao = partes[1].strip() if len(partes) > 1 else descricao_completa
-        else:
+        manager.buffer_row(tab, [data_fmt, orgao, subt, titulo, descricao, link])
+        manager.add_url(link)
+        added += 1
+
+    print(f"✅ igualdade_racial: {added} item(ns) bufferizados.")
+
+
+def scrape_anvisa(manager: SheetManager):
+    """
+    ANVISA – ul.noticias.listagem-noticias-com-foto > li
+    Colunas: Data | Órgão | Subtítulo | Título | Descrição | Link
+    """
+    url = "https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa"
+    data_hoje = manager.now_br()
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro ANVISA: {e}")
+        return
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    itens = soup.select("ul.noticias.listagem-noticias-com-foto > li")
+
+    tab = "anvisa"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
+
+    added = 0
+    for li in itens:
+        h2 = li.find("h2", class_="titulo")
+        a = h2.find("a") if h2 else None
+        if not a:
             continue
+        titulo = a.get_text(strip=True)
+        link = a.get("href", "").strip()
+        if not link or manager.seen_url(link):
+            continue
+
+        subt_tag = li.find("div", class_="subtitulo-noticia")
+        subt = subt_tag.get_text(strip=True) if subt_tag else "—"
+
+        desc_span = li.find("span", class_="descricao")
+        if not desc_span:
+            continue
+        full = desc_span.get_text(strip=True)
+        partes = [p.strip() for p in full.split("-")]
+        data_lida = partes[0] if partes else ""
+        descricao = partes[1] if len(partes) > 1 else full
 
         if data_lida == data_hoje:
-            sheet.worksheet("anvisa").append_row([
-                data_lida, "ANVISA", subtitulo, titulo, descricao, link
-            ])
-            add_scraped_url(sheet, link)
+            manager.buffer_row(tab, [data_lida, "ANVISA", subt, titulo, descricao, link])
+            manager.add_url(link)
+            added += 1
 
-    print("✅ Notícias da Anvisa do dia atual inseridas com sucesso.")
+    print(f"✅ anvisa: {added} item(ns) bufferizados.")
 
-# Executar
-sheet = initialize_sheet()
-raspar_anvisa_do_dia(sheet)
 
-"""# Consed"""
+def scrape_consed(manager: SheetManager, max_pages: int = 5):
+    """
+    Consed – paginação ?page=N; itens com <a> contendo <h2>, <small> (data), <p> (descrição)
+    Colunas: Data | Órgão | Subtítulo | Título | Descrição | Link
+    """
+    base = "https://www.consed.org.br/noticias?page="
+    data_desejada = manager.now_br()
 
-def initialize_sheet(sheet_id, sheet_name='Página2'):
-    # Escopo e credenciais para acessar a API do Google Sheets
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
-    return sheet
+    tab = "consed"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
 
-def get_already_scraped_urls(sheet, url_sheet_name="URLs"):
-    try:
-        urls_sheet = sheet.spreadsheet.worksheet(url_sheet_name)
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.spreadsheet.add_worksheet(title=url_sheet_name, rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclude the header
+    already = 0
+    added = 0
 
-def add_scraped_url(sheet, url, url_sheet_name="URLs"):
-    urls_sheet = sheet.spreadsheet.worksheet(url_sheet_name)
-    urls_sheet.append_row([url])
-
-def raspar_noticias_por_data(sheet, data_desejada=None, max_pages=5):
-    # URL base do site que queremos raspar
-    base_url = "https://www.consed.org.br/noticias?page="
-
-    # Lista para armazenar os dados extraídos
-    data = []
-
-    # Data atual
-    if data_desejada is None:
-        tz = pytz.timezone('America/Sao_Paulo')
-        data_desejada = datetime.now(tz).strftime("%d/%m/%Y")  # Formato de data: DD/MM/YYYY
-
-    # Recupera URLs já raspadas
-    already_scraped_urls = get_already_scraped_urls(sheet)
-
-    # Número da página inicial
-    page = 1
-
-    while page <= max_pages:
-        # Monta a URL da página atual
-        url = f"{base_url}{page}"
-
+    for page in range(1, max_pages + 1):
+        url = f"{base}{page}"
         try:
-            # Faz a requisição para obter o conteúdo da página
-            response = requests.get(url, timeout=10)  # Timeout de 10 segundos
-            response.raise_for_status()  # Levanta uma exceção para status de erro HTTP
-        except requests.exceptions.RequestException as e:
-            print(f"Erro ao acessar a URL {url}: {e}")
+            resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Erro Consed {url}: {e}")
             break
 
-        content = response.content
-
-        # Parseia o conteúdo da página com BeautifulSoup
-        soup = BeautifulSoup(content, 'html.parser')
-
-        # Encontrar todos os artigos de notícias
-        news_items = soup.find_all('a', href=True)
-
-        # Verifica se há notícias na página
-        if not news_items:
+        soup = BeautifulSoup(resp.content, "html.parser")
+        anchors = soup.find_all("a", href=True)
+        if not anchors:
             break
 
-        # Iterar sobre cada item de notícia e extrair as informações
-        for item in news_items:
-            title_tag = item.find('h2')
-            date_tag = item.find('small')
-            description_tag = item.find('p')
+        for a in anchors:
+            title_tag = a.find("h2")
+            date_tag = a.find("small")
+            desc_tag = a.find("p")
+            if not (title_tag and date_tag and desc_tag):
+                continue
 
-            # Verificar se todos os elementos são encontrados
-            if title_tag and date_tag and description_tag:
-                title = title_tag.text.strip()
-                date = date_tag.text.strip()
-                description = description_tag.text.strip()
-                link = item['href']
+            title = title_tag.get_text(strip=True)
+            date_txt = date_tag.get_text(strip=True)
+            desc = desc_tag.get_text(strip=True)
+            href = a.get("href", "").strip()
+            link = href if href.startswith("http") else f"https://www.consed.org.br{href}"
 
-                # Verificar se a data é igual à data desejada
-                if date == data_desejada:
-                    # Armazenar os dados no formato de lista
-                    full_link = link if link.startswith("http") else f"https://www.consed.org.br{link}"
+            if date_txt != data_desejada:
+                continue
+            if not link or manager.seen_url(link):
+                already += 1
+                continue
 
-                    # Verificar se a URL já foi raspada
-                    if full_link not in already_scraped_urls:
-                        dados = [date, title, description, full_link]
+            manager.buffer_row(tab, [date_txt, "Consed", "—", title, desc, link])
+            manager.add_url(link)
+            added += 1
 
-                        # Adicionar a lista de dados para ser inserida na planilha
-                        data.append(dados)
+    print(f"✅ consed: {added} novo(s), {already} já existiam no cache.")
 
-                        # Adicionar URL à lista de URLs raspadas
-                        add_scraped_url(sheet, full_link)
 
-        # Incrementa o número da página
-        page += 1
-
-    # Inserir todos os dados na planilha de uma vez
-    if data:
-        sheet.append_rows(data)
-        print('Dados inseridos com sucesso na planilha.')
-    else:
-        print('Nenhum dado encontrado para a data especificada.')
-
-# Exemplo de uso
-sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'  # Chave da planilha
-sheet = initialize_sheet(sheet_id, sheet_name='consed')
-# Para raspar notícias da data atual
-raspar_noticias_por_data(sheet, max_pages=5)
-
-# Undime
-
-import re
-import pytz
-import gspread
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
-from oauth2client.service_account import ServiceAccountCredentials
-
-def initialize_sheet(sheet_id, sheet_name='Página3'):
-    # Escopo e credenciais para acessar a API do Google Sheets
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
-    return sheet
-
-def get_already_scraped_urls(sheet, url_sheet_name="URLs"):
-    try:
-        urls_sheet = sheet.spreadsheet.worksheet(url_sheet_name)
-    except gspread.exceptions.WorksheetNotFound:
-        urls_sheet = sheet.spreadsheet.add_worksheet(title=url_sheet_name, rows="1", cols="1")
-        urls_sheet.append_row(["URLs"])
-    urls = urls_sheet.col_values(1)
-    return set(urls[1:])  # Exclui o cabeçalho
-
-def add_scraped_url(sheet, url, url_sheet_name="URLs"):
-    urls_sheet = sheet.spreadsheet.worksheet(url_sheet_name)
-    urls_sheet.append_row([url])
-
-def raspar_noticias(data_desejada, sheet):
+def scrape_undime(manager: SheetManager):
+    """
+    Undime – lista na página /noticia/page/1 com cards que incluem no link a data dd-mm-aaaa
+    Colunas: Data | Órgão | Subtítulo | Título | Descrição | Link
+    """
     url = "https://undime.org.br/noticia/page/1"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
+    data_desejada = manager.now_br()
 
-    noticias = soup.find_all('div', class_='noticia mt-4 shadow2 p-3 border-radius')
+    tab = "undime"
+    manager.ensure_header(tab, ["Data", "Órgão", "Subtítulo", "Título", "Descrição", "Link"])
 
-    datas = []
-    titulos = []
-    descricoes = []
-    links = []
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Erro Undime: {e}")
+        return
 
-    # Recupera URLs já raspadas
-    already_scraped_urls = get_already_scraped_urls(sheet)
+    soup = BeautifulSoup(resp.content, "html.parser")
+    cards = soup.find_all("div", class_="noticia mt-4 shadow2 p-3 border-radius")
 
-    for noticia in noticias:
-        # Link e Data
-        link_elem = noticia.find('a', href=True)
-        if link_elem:
-            link = "https://undime.org.br" + link_elem['href']
+    added = 0
+    for card in cards:
+        link_elem = card.find("a", href=True)
+        if not link_elem:
+            continue
+        link = "https://undime.org.br" + link_elem["href"]
 
-            # Verificar se a URL já foi raspada
-            if link in already_scraped_urls:
-                continue
-
-            # Extrair data do link e transformar em xx/xx/xxxx
-            data_match = re.search(r'\d{2}-\d{2}-\d{4}', link)
-            if data_match:
-                data_str = data_match.group(0)
-                data = datetime.strptime(data_str, '%d-%m-%Y').strftime('%d/%m/%Y')
-                if data == data_desejada:
-                    datas.append(data)
-                    links.append(link)
-                    add_scraped_url(sheet, link)  # Adiciona URL à lista de URLs raspadas
-                else:
-                    continue
-            else:
-                continue
-        else:
+        # Data no padrão dd-mm-aaaa dentro da URL
+        m = re.search(r"\b(\d{2}-\d{2}-\d{4})\b", link)
+        if not m:
+            continue
+        data_fmt = datetime.strptime(m.group(1), "%d-%m-%Y").strftime("%d/%m/%Y")
+        if data_fmt != data_desejada:
+            continue
+        if manager.seen_url(link):
             continue
 
-        # Título
-        titulo_elem = noticia.find('h4')
-        if titulo_elem:
-            titulo = titulo_elem.text.strip()
-            titulos.append(titulo)
-        else:
-            titulos.append(None)
+        title_elem = card.find("h4")
+        titulo = title_elem.get_text(strip=True) if title_elem else "—"
 
-        # Descrição — CORRIGIDO
-        try:
-            descricao_elem = noticia.select_one('p.acessibilidade > a')
-            descricao = descricao_elem.text.strip() if descricao_elem else None
-        except:
-            descricao = None
-        descricoes.append(descricao)
+        # Descrição: seletor p.acessibilidade > a
+        desc = "—"
+        de = card.select_one("p.acessibilidade > a")
+        if de:
+            desc = de.get_text(strip=True)
 
-    return zip(datas, titulos, descricoes, links)
+        manager.buffer_row(tab, [data_fmt, "Undime", "—", titulo, desc, link])
+        manager.add_url(link)
+        added += 1
 
-def salvar_na_planilha(sheet, dados):
-    linhas = []
-    for data, titulo, descricao, link in dados:
-        linhas.append([data, titulo, descricao, link])
-    sheet.append_rows(linhas, value_input_option='USER_ENTERED')
-    print('Dados inseridos com sucesso na planilha.')
+    print(f"✅ undime: {added} item(ns) bufferizados.")
 
-# Chave da planilha Google Sheets
-sheet_id = '1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY'
-sheet = initialize_sheet(sheet_id, sheet_name='undime')
 
-# Data de hoje no fuso horário do Brasil
-tz = pytz.timezone('America/Sao_Paulo')
-data_hoje = datetime.now(tz).strftime('%d/%m/%Y')
+# -------------------------------------------------------------------
+# MAIN
+# -------------------------------------------------------------------
 
-# Raspar dados das notícias da data de hoje
-dados_noticias = raspar_noticias(data_hoje, sheet)
+def main():
+    mgr = SheetManager(SHEET_ID, JSON_KEYFILE, urls_tab="URLs", batch_size=60)
 
-# Salvar dados na planilha
-salvar_na_planilha(sheet, dados_noticias)
+    # Ministérios padrão gov.br listagem <li>
+    scrape_gov_listagem_padrao(mgr, "https://www.gov.br/esporte/pt-br/noticias-e-conteudos/esporte", tab="esporte")
+    scrape_gov_listagem_padrao(mgr, "https://www.gov.br/mec/pt-br/assuntos/noticias", tab="mec")
+
+    # Saúde (estrutura própria)
+    scrape_saude(mgr)
+
+    # Povos Indígenas (byline 'última modificação' – ajuste URL mensal se quiser)
+    scrape_povos_indigenas(mgr)
+
+    # ANS
+    scrape_ans(mgr)
+
+    # CFM
+    scrape_cfm(mgr)
+
+    # Fiocruz
+    scrape_fiocruz(mgr)
+
+    # Igualdade Racial
+    scrape_igualdade_racial(mgr)
+
+    # ANVISA
+    scrape_anvisa(mgr)
+
+    # Consed
+    scrape_consed(mgr, max_pages=5)
+
+    # Undime
+    scrape_undime(mgr)
+
+    # envia tudo o que ficou no buffer
+    mgr.close()
+    print("🏁 Finalizado com sucesso (leituras minimizadas e escritas em lote).")
+
+
+if __name__ == "__main__":
+    main()
