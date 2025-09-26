@@ -2,7 +2,7 @@ import re
 import time
 from typing import Dict, List, Optional, Iterable
 from datetime import datetime
-
+import os
 import requests
 from bs4 import BeautifulSoup
 import gspread
