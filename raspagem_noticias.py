@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 import pytz
 
 # CONFIG
-SHEET_ID = "1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY"
+SHEET_ID = os.getenv("SHEET_ID")
 JSON_KEYFILE = "credentials.json"
 TZ = pytz.timezone("America/Sao_Paulo")
 DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
