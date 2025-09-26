@@ -10,7 +10,9 @@ from google.oauth2.service_account import Credentials
 import pytz
 
 # CONFIG
-SHEET_ID = "1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY"
+SHEET_ID = os.environ.get('SHEET_ID')
+if not SHEET_ID:
+    raise RuntimeError("Variável de ambiente SHEET_ID não encontrada. Configure o secret no GitHub Actions.")
 JSON_KEYFILE = "credentials.json"
 TZ = pytz.timezone("America/Sao_Paulo")
 DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
