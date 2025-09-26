@@ -1,25 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Raspagem consolidada com inserção de linhas (linha 2) e controle de cota.
-
-Abas e colunas (iguais às suas):
-- gov:     [Data, Ministério, Subtítulo, Título, Resumo, Link]           (Ministérios)
-- cfm:     [Data, Título, Descrição, Link]
-- consed:  [Data, Título, Descrição, Link]
-- undime:  [Data, Título, Descrição, Link]
-- ans:     [Data, Subtítulo, Título, Link]
-- anvisa:  [Data, Subtítulo, Título, Descrição, Tags, Link]
-- fiocruz: [Data, Título, Descrição, Link]
-- URLs:    cache de de-dup (criada se não existir)
-
-Melhorias:
-- Abre a planilha 1x (cache de worksheets)
-- Lê URLs 1x e mantém set em memória
-- Insert em lote por aba (uma chamada por aba)
-- Retry exponencial para gspread APIError (quota 429)
-"""
-
-import re
+mport re
 import time
 from typing import Dict, List, Optional, Iterable
 from datetime import datetime
@@ -30,7 +9,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pytz
 
-# =============== CONFIG ===============
+# CONFIG
 SHEET_ID = "1G81BndSPpnViMDxRKQCth8PwK0xmAwH-w-T7FjgnwcY"
 JSON_KEYFILE = "credentials.json"
 TZ = pytz.timezone("America/Sao_Paulo")
@@ -41,7 +20,7 @@ RATE_LIMIT_PAT = re.compile(
     re.I,
 )
 
-# ======= HELPERS: gspread com retry e gerenciador da planilha =======
+# HELPERS: gspread com retry e gerenciador da planilha
 def with_gspread_retry(fn, *args, **kwargs):
     """Retry exponencial para erros 429/limite de cota."""
     max_attempts = kwargs.pop("_max_attempts", 6)
@@ -109,7 +88,7 @@ class SheetManager:
             with_gspread_retry(self._urls_ws.append_row, [url])
             self._url_set.add(url)
 
-    # ---------- Worksheets ----------
+    # Worksheets
     def _get_ws_existing(self, title: str) -> Optional[gspread.Worksheet]:
         """Retorna worksheet existente; se não existir, retorna None (não cria)."""
         if title in self._ws_cache:
@@ -122,7 +101,7 @@ class SheetManager:
             print(f"⚠️ Aba '{title}' não encontrada. Pulando sem criar.")
             return None
 
-    # ---------- Inserção (sempre na linha 2) ----------
+    # Inserção (sempre na linha 2)
     def insert_rows_top(self, tab: str, rows: Iterable[List[str]]):
         ws = self._get_ws_existing(tab)
         if ws is None:
@@ -134,7 +113,7 @@ class SheetManager:
         # insere todas as linhas de uma vez a partir da linha 2.
         with_gspread_retry(ws.insert_rows, rows, row=2, value_input_option="USER_ENTERED")
 
-# ======= HELPERS: rede =======
+# HELPERS: rede
 def get_html(url: str, timeout: int = 25) -> Optional[BeautifulSoup]:
     try:
         r = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
@@ -144,7 +123,7 @@ def get_html(url: str, timeout: int = 25) -> Optional[BeautifulSoup]:
         print(f"Erro ao acessar {url}: {e}")
         return None
 
-# =============== RASPAGENS (MINISTÉRIOS -> aba 'gov') ===============
+# RASPAGENS (MINISTÉRIOS -> aba 'gov')
 def rasp_gov_li_default(manager: SheetManager, url: str):
     """
     Páginas gov.br com <li> contendo:
@@ -571,7 +550,7 @@ def rasp_anvisa(manager: SheetManager):
     if novos:
         manager.insert_rows_top("anvisa", novos)
 
-# =============== EXECUÇÃO ===============
+# EXECUÇÃO
 def main():
     mgr = SheetManager(SHEET_ID, JSON_KEYFILE)
 
