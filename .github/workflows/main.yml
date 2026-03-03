@@ -41,7 +41,6 @@ jobs:
           GOOGLE_CREDENTIALS_PATH: credentials.json
           SPREADSHEET_ID: ${{ secrets.SHEET_ID }}
           MAX_NOTICIAS_POR_FONTE: ${{ vars.MAX_NOTICIAS_POR_FONTE }}
-          UF_FILTER: ${{ vars.UF_FILTER }}
           MODO_RAPIDO: ${{ vars.MODO_RAPIDO }}
           ENABLE_DATE_ENRICHMENT: ${{ vars.ENABLE_DATE_ENRICHMENT }}
         run: python geral2.py
