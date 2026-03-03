@@ -3,7 +3,7 @@ name: Coleta Notícias
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 10 * * *"
+     - cron: "45 22 3 3 *"
 
 jobs:
   executar-script:
