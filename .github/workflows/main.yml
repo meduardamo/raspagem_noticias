@@ -3,7 +3,7 @@ name: Coleta Notícias
 on:
   workflow_dispatch:
   schedule:
-     - cron: "45 22 3 3 *"
+    - cron: "45 22 3 3 *"
 
 jobs:
   executar-script:
@@ -22,12 +22,24 @@ jobs:
       - name: Instalar dependências
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+
+      - name: Preparar credenciais Google
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+        run: |
+          if [ -z "$GOOGLE_CREDENTIALS_JSON" ]; then
+            echo "Secret GOOGLE_APPLICATION_CREDENTIALS_JSON não configurado no repositório."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_CREDENTIALS_JSON" > credentials.json
+          python -c "import json; json.load(open('credentials.json', encoding='utf-8')); print('credentials.json válido')"
 
       - name: Executar script
         env:
-          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          SPREADSHEET_ID: ${{ vars.SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          GOOGLE_CREDENTIALS_PATH: credentials.json
+          SPREADSHEET_ID: ${{ secrets.SHEET_ID }}
           MAX_NOTICIAS_POR_FONTE: ${{ vars.MAX_NOTICIAS_POR_FONTE }}
           UF_FILTER: ${{ vars.UF_FILTER }}
           MODO_RAPIDO: ${{ vars.MODO_RAPIDO }}
