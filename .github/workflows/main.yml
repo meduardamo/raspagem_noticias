@@ -12,17 +12,36 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 5
       matrix:
         uf_block:
           - "AC"
           - "AL"
           - "AM"
           - "AP"
-          - "BA,CE,DF,ES,GO"
-          - "MA,MG,MS,MT,PA"
-          - "PB,PE,PI,PR,RJ"
-          - "RN,RO,RR,RS,SC,SE,SP,TO"
+          - "BA"
+          - "CE"
+          - "DF"
+          - "ES"
+          - "GO"
+          - "MA"
+          - "MG"
+          - "MS"
+          - "MT"
+          - "PA"
+          - "PB"
+          - "PE"
+          - "PI"
+          - "PR"
+          - "RJ"
+          - "RN"
+          - "RO"
+          - "RR"
+          - "RS"
+          - "SC"
+          - "SE"
+          - "SP"
+          - "TO"
     env:
       TZ: America/Sao_Paulo
 
