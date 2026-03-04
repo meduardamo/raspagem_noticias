@@ -9,6 +9,16 @@ on:
 jobs:
   executar-script:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        uf_block:
+          - "AC,AL,AM,AP,BA,CE"
+          - "DF,ES,GO,MA,MG,MS"
+          - "MT,PA,PB,PE,PI,PR"
+          - "RJ,RN,RO,RR,RS,SC"
+          - "SE,SP,TO"
     env:
       TZ: America/Sao_Paulo
 
@@ -37,12 +47,15 @@ jobs:
           printf '%s' "$GOOGLE_CREDENTIALS_JSON" > credentials.json
           python -c "import json; json.load(open('credentials.json', encoding='utf-8')); print('credentials.json válido')"
 
-      - name: Executar script
+      - name: Executar script (bloco ${{ matrix.uf_block }})
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
           GOOGLE_CREDENTIALS_PATH: credentials.json
           SPREADSHEET_ID: ${{ secrets.SHEET_ID_ESTADOS }}
+          UF_FILTER: ${{ matrix.uf_block }}
           MAX_NOTICIAS_POR_FONTE: ${{ vars.MAX_NOTICIAS_POR_FONTE }}
           MODO_RAPIDO: ${{ vars.MODO_RAPIDO }}
           ENABLE_DATE_ENRICHMENT: ${{ vars.ENABLE_DATE_ENRICHMENT }}
-        run: python geral2.py
+        run: |
+          echo "Executando bloco de UFs: $UF_FILTER"
+          python geral2.py
