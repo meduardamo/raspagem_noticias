@@ -279,7 +279,7 @@ def rasp_igualdade_racial(manager: SheetManager):
     Ministério da Igualdade Racial (estrutura em <div class='conteudo'>)
     Saída 'gov'.
     """
-    url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/copy2_of_noticias"
+    url = "https://www.gov.br/igualdaderacial/pt-br/assuntos/noticias"
     soup = get_html(url)
     if not soup:
         return
