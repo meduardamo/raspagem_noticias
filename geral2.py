@@ -81,37 +81,12 @@ def normalizar_link(base_url, link):
 
 
 def gerar_urls_alternativas(url):
-    """Gera variacoes de URL para aumentar chance de conexao em ambientes restritos (ex.: CI)."""
+    """Mantem apenas a URL original configurada para o portal."""
     base = str(url or '').strip()
     if not base:
         return []
 
-    urls = []
-
-    def _add(candidate):
-        if candidate and candidate not in urls:
-            urls.append(candidate)
-
-    _add(base)
-
-    try:
-        partes = urlsplit(base)
-        if partes.scheme in ('http', 'https') and partes.netloc:
-            alt_scheme = 'http' if partes.scheme == 'https' else 'https'
-            _add(urlunsplit((alt_scheme, partes.netloc, partes.path, partes.query, partes.fragment)))
-
-            host = partes.netloc
-            if host.startswith('www.'):
-                alt_host = host[4:]
-            else:
-                alt_host = f"www.{host}"
-
-            _add(urlunsplit((partes.scheme, alt_host, partes.path, partes.query, partes.fragment)))
-            _add(urlunsplit((alt_scheme, alt_host, partes.path, partes.query, partes.fragment)))
-    except Exception:
-        pass
-
-    return urls
+    return [base]
 
 
 def _sanitizar_href_extraido(href):
@@ -918,6 +893,10 @@ def setup_gspread():
 def executar_com_retry(func, descricao, tentativas=5, espera_inicial=2):
     termos_transitorios = [
         '10053',
+        '429',
+        'quota exceeded',
+        'rate limit',
+        'too many requests',
         'connection aborted',
         'connection reset',
         'timed out',
@@ -937,7 +916,10 @@ def executar_com_retry(func, descricao, tentativas=5, espera_inicial=2):
             ultima_tentativa = tentativa == tentativas
 
             if erro_transitorio and not ultima_tentativa:
-                espera = espera_inicial * tentativa
+                if '429' in erro or 'quota exceeded' in erro or 'rate limit' in erro or 'too many requests' in erro:
+                    espera = max(15, espera_inicial * 10 * tentativa)
+                else:
+                    espera = espera_inicial * tentativa
                 print(f"[AVISO] Falha temporária em {descricao} (tentativa {tentativa}/{tentativas}): {e}")
                 print(f"[AVISO] Aguardando {espera}s para tentar novamente...")
                 time.sleep(espera)
