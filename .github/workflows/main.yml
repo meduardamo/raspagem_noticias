@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 2
       matrix:
         uf_block:
           - "AC"
@@ -53,11 +53,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-
-      - name: Instalar Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
 
       - name: Instalar dependências
         run: |
