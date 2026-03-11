@@ -1,6 +1,5 @@
 import sys
 sys.dont_write_bytecode = True
-
 import json
 import os
 import gspread
@@ -14,8 +13,11 @@ import time
 import urllib3
 import re
 import ssl
+import socket
 import unicodedata
+from urllib.parse import urlsplit, urlunsplit
 from email.utils import parsedate_to_datetime
+from urllib3.util import connection as urllib3_connection
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -31,6 +33,14 @@ if hasattr(sys.stderr, "reconfigure"):
 
 # Desabilita avisos de certificados SSL inseguros (comum em sites do governo)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Em algumas redes, rotas IPv6 ficam instaveis e causam travas em HTTPS.
+# Forca IPv4 para requests/urllib3 quando habilitado (padrao: ligado).
+if os.getenv('FORCE_IPV4', '1') == '1':
+    try:
+        urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
+    except Exception:
+        pass
 
 MESES_PT = {
     'janeiro': '01',
@@ -68,6 +78,40 @@ def normalizar_link(base_url, link):
     if str(link).startswith('http'):
         return link
     return base_url + (link if str(link).startswith('/') else '/' + str(link))
+
+
+def gerar_urls_alternativas(url):
+    """Gera variacoes de URL para aumentar chance de conexao em ambientes restritos (ex.: CI)."""
+    base = str(url or '').strip()
+    if not base:
+        return []
+
+    urls = []
+
+    def _add(candidate):
+        if candidate and candidate not in urls:
+            urls.append(candidate)
+
+    _add(base)
+
+    try:
+        partes = urlsplit(base)
+        if partes.scheme in ('http', 'https') and partes.netloc:
+            alt_scheme = 'http' if partes.scheme == 'https' else 'https'
+            _add(urlunsplit((alt_scheme, partes.netloc, partes.path, partes.query, partes.fragment)))
+
+            host = partes.netloc
+            if host.startswith('www.'):
+                alt_host = host[4:]
+            else:
+                alt_host = f"www.{host}"
+
+            _add(urlunsplit((partes.scheme, alt_host, partes.path, partes.query, partes.fragment)))
+            _add(urlunsplit((alt_scheme, alt_host, partes.path, partes.query, partes.fragment)))
+    except Exception:
+        pass
+
+    return urls
 
 
 def _sanitizar_href_extraido(href):
@@ -861,7 +905,14 @@ def setup_gspread():
     else:
         creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
 
-    return gspread.authorize(creds)
+    client = gspread.authorize(creds)
+
+    # Evita bloqueio indefinido em handshake TLS no runner/local.
+    # Com timeout, a rotina de retry consegue tentar novamente.
+    timeout_conexao = int(os.getenv('GSHEETS_CONNECT_TIMEOUT', '12'))
+    timeout_leitura = int(os.getenv('GSHEETS_READ_TIMEOUT', os.getenv('GSHEETS_TIMEOUT', '30')))
+    client.set_timeout((timeout_conexao, timeout_leitura))
+    return client
 
 
 def executar_com_retry(func, descricao, tentativas=5, espera_inicial=2):
@@ -939,10 +990,11 @@ def scraping_noticias(url, origem):
             driver = None
             try:
                 try:
-                    driver = webdriver.Chrome(options=options)
+                    driver_path = ChromeDriverManager().install()
+                    driver = webdriver.Chrome(service=Service(driver_path), options=options)
                 except Exception as driver_err:
-                    print(f"[AVISO] Selenium Manager falhou ({driver_err}). Tentando webdriver-manager...")
-                    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+                    print(f"[AVISO] webdriver-manager falhou ({driver_err}). Tentando Selenium Manager...")
+                    driver = webdriver.Chrome(options=options)
 
                 driver.set_page_load_timeout(40)
                 driver.get(url)
@@ -960,29 +1012,28 @@ def scraping_noticias(url, origem):
             adapter = HTTPAdapter(max_retries=retry)
             session.mount("http://", adapter)
             session.mount("https://", adapter)
-            
-            try:
-                response = session.get(url, headers=headers, timeout=30, verify=False)
-            except requests.exceptions.RequestException as req_err:
-                response = None
-                erro_txt = str(req_err)
 
-                # Fallback automÃ¡tico: tenta HTTP quando HTTPS falha por bloqueio/rede.
-                if str(url).startswith("https://"):
-                    url_http = "http://" + str(url)[8:]
-                    try:
-                        print(f"[AVISO] Erro no HTTPS. Tentando conexÃ£o alternativa via HTTP: {url_http}")
-                        response = session.get(url_http, headers=headers, timeout=30, verify=False)
-                        url = url_http
-                    except requests.exceptions.RequestException:
-                        response = None
+            response = None
+            ultimo_erro = None
+            urls_tentativa = gerar_urls_alternativas(url)
+            for idx, url_tentativa in enumerate(urls_tentativa):
+                try:
+                    if idx > 0:
+                        print(f"[AVISO] Tentando URL alternativa: {url_tentativa}")
+                    response = session.get(url_tentativa, headers=headers, timeout=30, verify=False)
+                    url = url_tentativa
+                    break
+                except requests.exceptions.RequestException as req_err:
+                    ultimo_erro = req_err
+                    continue
 
-                if response is None:
-                    if "10013" in erro_txt or "acesso a um soquete" in erro_txt.lower():
-                        print(f"[AVISO] Host bloqueado/inacessÃ­vel em rede local: {url}. Ignorando.")
-                    else:
-                        print(f"[AVISO] Falha de conexÃ£o em {url}. Ignorando.")
-                    return noticias
+            if response is None:
+                erro_txt = str(ultimo_erro or '').lower()
+                if "10013" in erro_txt or "acesso a um soquete" in erro_txt:
+                    print(f"[AVISO] Host bloqueado/inacessivel na rede do runner: {url}. Ignorando.")
+                else:
+                    print(f"[AVISO] Falha de conexao em todas as tentativas para {url}. Ignorando.")
+                return noticias
 
             if response.status_code != 200:
                 msg = "Link Quebrado (404)" if response.status_code == 404 else f"Status {response.status_code}"
