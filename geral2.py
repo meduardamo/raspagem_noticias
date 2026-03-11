@@ -986,10 +986,8 @@ def scraping_noticias(url, origem):
             options.add_argument("--no-first-run")
             options.add_argument("--window-size=1920,1080")
             options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-            # Evita deteccao de automacao por sites com protecao anti-bot
+            # Desativa sinalizacao de automacao (compativel com --headless=new)
             options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option("useAutomationExtension", False)
 
             driver = None
             try:
@@ -1020,11 +1018,13 @@ def scraping_noticias(url, origem):
             response = None
             ultimo_erro = None
             urls_tentativa = gerar_urls_alternativas(url)
+            # Timeout curto por tentativa (12s): 4 variantes x 12s = max 48s por site
+            timeout_req = int(os.getenv("REQUEST_TIMEOUT", "12"))
             for idx, url_tentativa in enumerate(urls_tentativa):
                 try:
                     if idx > 0:
                         print(f"[AVISO] Tentando URL alternativa: {url_tentativa}")
-                    response = session.get(url_tentativa, headers=headers, timeout=30, verify=False)
+                    response = session.get(url_tentativa, headers=headers, timeout=timeout_req, verify=False)
                     url = url_tentativa
                     break
                 except requests.exceptions.RequestException as req_err:
