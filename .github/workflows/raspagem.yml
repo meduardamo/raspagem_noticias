@@ -2,7 +2,11 @@ name: Raspagem e Notificação Automática
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Executa a cada hora no minuto 0
+    # De 3 em 3 horas (06, 09, 12, 15, 18 e 21 BRT), no minuto 52. Era de hora em
+    # hora: 24 disparos por dia na fila do Actions, que e o que faz os outros
+    # jobs atrasarem. A rodada em si leva 0,5 min, entao a economia e de fila,
+    # nao de tempo de maquina.
+    - cron: '52 0,9,12,15,18,21 * * *'  # Executa a cada hora no minuto 0
   workflow_dispatch:      # Permite execução manual pelo GitHub
 
 jobs:
