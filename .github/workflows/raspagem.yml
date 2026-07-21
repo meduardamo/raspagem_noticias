@@ -2,13 +2,12 @@ name: Raspagem e Notificação Automática
 
 on:
   schedule:
-    # De 3 em 3 horas (06, 09, 12, 15, 18 e 21 BRT), no minuto 52. Era de hora em
-    # hora: 24 disparos por dia na fila do Actions, que e o que faz os outros
-    # jobs atrasarem. A rodada em si leva 0,5 min, entao a economia e de fila,
-    # nao de tempo de maquina.
-    # 06, 09, 12, 15, 18 e 21 BRT. Minuto 52 pra ficar fora da hora cheia,
-    # que e quando o Actions mais enfileira rodada agendada.
-    - cron: '52 0,9,12,15,18,21 * * *'
+    # 08, 10, 12, 14, 16 e 18 BRT. O passo do job so executa entre 8h e 18h BRT
+    # (ver 'Executar script dentro do horario'), entao agendar fora disso gastaria
+    # rodada a toa. Minuto 52 pra ficar fora da hora cheia, que e quando o Actions
+    # mais enfileira rodada agendada. Era de hora em hora: 24 disparos por dia na
+    # fila, sendo que a rodada leva 0,5 min de mediana.
+    - cron: '52 11,13,15,17,19,21 * * *'
   workflow_dispatch:      # Permite execução manual pelo GitHub
 
 jobs:
